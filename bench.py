@@ -328,7 +328,7 @@ def parse_output(output: str, run: int) -> list[Measurement]:
 
 def build_all(zig: str, optimize: str) -> None:
     """Build every language once, before any measurement."""
-    run_warmup([zig, "build", f"-Doptimize={optimize}"])
+    run_warmup([zig, "build", f"-Doptimize={optimize}", "-Dcpu=native"])
     run_warmup(["cmake", "-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"])
     run_warmup(["cmake", "--build", "build", "--parallel"])
     run_warmup(["cargo", "build", "--release", "--bins"])

@@ -1,14 +1,2 @@
 [tools]
 zig = "0.16.0"
-
-[tasks.fmt]
-run = "zig fmt zig/ build.zig build.zig.zon"
-
-[tasks.build]
-run = "zig build"
-
-[tasks.ci]
-run = [
-    { task = "fmt" },
-    { task = "build" },
-]
