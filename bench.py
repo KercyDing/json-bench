@@ -1,4 +1,4 @@
-"""Run zig-serde-bench and open the interactive result pages.
+"""Run json-bench and open the interactive result pages.
 
 Five user tasks are measured, each run by the JSON implementations that
 support it:
@@ -539,7 +539,7 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
     }
 
     lines = [
-        "# zig-serde-bench results",
+        "# json-bench results",
         "",
         (
             f"Median of {runs} run(s). Throughput is the median of the per-run aggregate "
@@ -891,7 +891,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>zig-serde-bench</title>
+<title>json-bench</title>
 <script src="{HIGHCHARTS_CDN}highcharts.js"></script>
 <script src="{HIGHCHARTS_CDN}modules/exporting.js"></script>
 <script src="{HIGHCHARTS_CDN}modules/offline-exporting.js"></script>
@@ -915,7 +915,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
 </head>
 <body>
 <header>
-  <h1>zig-serde-bench</h1>
+  <h1>json-bench</h1>
   <p>{note}</p>
 </header>
 {body}

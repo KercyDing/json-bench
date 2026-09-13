@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(zig_serde_bench LANGUAGES C CXX)
+project(json_bench LANGUAGES C CXX)
 
 include(FetchContent)
 

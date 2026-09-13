@@ -1,7 +1,7 @@
 .{
-    .name = .zig_serde_bench,
+    .name = .json_bench,
     .version = "0.0.1",
-    .fingerprint = 0xf732bec3dc1f9c19,
+    .fingerprint = 0x6301286a6f6520c1,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .serde = .{

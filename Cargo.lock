@@ -121,6 +121,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-bench-rust"
+version = "0.1.0"
+dependencies = [
+ "sonic-rs",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,13 +517,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "zig-serde-bench-rust"
-version = "0.1.0"
-dependencies = [
- "sonic-rs",
 ]
 
 [[package]]
