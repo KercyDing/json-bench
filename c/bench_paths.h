@@ -3,8 +3,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Precompiled access steps for the `get` task, so libraries without an RFC 6901
-// pointer API can walk to the target with their own object/array accessors.
+// The `get` target per dataset: the RFC 6901 pointer, plus precompiled access
+// steps so libraries without a pointer API can walk there with their own
+// object/array accessors.
 typedef struct {
     bool is_index;
     const char *field;
@@ -13,6 +14,7 @@ typedef struct {
 
 typedef struct {
     const char *dataset;
+    const char *pointer;
     const bench_step *steps;
     size_t count;
 } bench_path;
@@ -49,14 +51,14 @@ static const bench_step bench_twitter_steps[] = {
 };
 
 static const bench_path bench_paths[] = {
-    {"canada.json", bench_canada_steps, BENCH_COUNT(bench_canada_steps)},
-    {"citm_catalog.json", bench_citm_steps, BENCH_COUNT(bench_citm_steps)},
-    {"fgo.json", bench_fgo_steps, BENCH_COUNT(bench_fgo_steps)},
-    {"github_events.json", bench_github_steps, BENCH_COUNT(bench_github_steps)},
-    {"gsoc-2018.json", bench_gsoc_steps, BENCH_COUNT(bench_gsoc_steps)},
-    {"lottie.json", bench_lottie_steps, BENCH_COUNT(bench_lottie_steps)},
-    {"otfcc.json", bench_otfcc_steps, BENCH_COUNT(bench_otfcc_steps)},
-    {"poet.json", bench_poet_steps, BENCH_COUNT(bench_poet_steps)},
-    {"twitter.json", bench_twitter_steps, BENCH_COUNT(bench_twitter_steps)},
-    {"twitterescaped.json", bench_twitter_steps, BENCH_COUNT(bench_twitter_steps)},
+    {"canada.json", "/features/0/geometry/coordinates/0/0", bench_canada_steps, BENCH_COUNT(bench_canada_steps)},
+    {"citm_catalog.json", "/areaNames/205705993", bench_citm_steps, BENCH_COUNT(bench_citm_steps)},
+    {"fgo.json", "/mstSvt/0/relateQuestIds/0", bench_fgo_steps, BENCH_COUNT(bench_fgo_steps)},
+    {"github_events.json", "/0/actor/login", bench_github_steps, BENCH_COUNT(bench_github_steps)},
+    {"gsoc-2018.json", "/0/name", bench_gsoc_steps, BENCH_COUNT(bench_gsoc_steps)},
+    {"lottie.json", "/assets/0/layers/0/nm", bench_lottie_steps, BENCH_COUNT(bench_lottie_steps)},
+    {"otfcc.json", "/head/version", bench_otfcc_steps, BENCH_COUNT(bench_otfcc_steps)},
+    {"poet.json", "/0/name", bench_poet_steps, BENCH_COUNT(bench_poet_steps)},
+    {"twitter.json", "/statuses/0/user/id", bench_twitter_steps, BENCH_COUNT(bench_twitter_steps)},
+    {"twitterescaped.json", "/statuses/0/user/id", bench_twitter_steps, BENCH_COUNT(bench_twitter_steps)},
 };

@@ -63,15 +63,9 @@ static const bench_path *find_path(const char *name) {
     return NULL;
 }
 
-/// Walks the precompiled path with yyjson's own accessors.
+/// Resolves the RFC 6901 pointer with yyjson's own pointer API.
 static yyjson_val *get_target(yyjson_val *root, const bench_path *path) {
-    yyjson_val *current = root;
-    for (size_t i = 0; i < path->count; i++) {
-        const bench_step *step = &path->steps[i];
-        current = step->is_index ? yyjson_arr_get(current, step->index) : yyjson_obj_get(current, step->field);
-        if (current == NULL) return NULL;
-    }
-    return current;
+    return yyjson_ptr_get(root, path->pointer);
 }
 
 static uint64_t bench_decode(const char *input, size_t size, size_t repeats) {

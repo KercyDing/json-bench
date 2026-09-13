@@ -88,7 +88,7 @@ the report.
 ## Get targets
 
 The `get` task reads one nested element per dataset with each library's own
-access API: `ptrGet` (RFC 6901) for jsonz, `at_pointer` for simdjson, and native
+access API: `ptrGet` (RFC 6901) for jsonz, `at_pointer` for simdjson, `yyjson_ptr_get` for yyjson, and native
 object/array accessors for the rest.
 
 | Dataset | Pointer |
