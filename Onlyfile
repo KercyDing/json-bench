@@ -1,0 +1,12 @@
+!version 0.5
+
+[help] Run the JSON benchmarks
+[pass] Benchmarks complete.
+[fail] Benchmarks failed.
+bench(args..):
+    uv run bench.py {{args}}
+
+[help] Clean build output and caches
+[pass] Clean complete.
+clean():
+    rm -rf .zig-cache zig-out zig-pkg build target results __pycache__ .ruff_cache
