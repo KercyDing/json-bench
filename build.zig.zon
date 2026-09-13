@@ -8,7 +8,10 @@
             .url = "git+https://github.com/OrlovEvgeny/serde.zig?ref=master#ee707016ee80bf2caddbfa3e1498c5699d287ba3",
             .hash = "serde-1.1.0-1DszT1I_EgAdQQ0iYBWv7CN92g-m4PiH2_Hr7xV-rUOy",
         },
-        .jsonz = .{ .path = "../jsonz" },
+        .jsonz = .{
+            .url = "git+https://github.com/KercyDing/jsonz?ref=v0.7.0#ff823a3337c218c4dd222cd57571900268c45f01",
+            .hash = "jsonz-0.7.0-DD_xnsn8BgCyfzmO7ob_g8v0Y-0wWJcWwY2MIddQ6sAJ",
+        },
     },
     .paths = .{
         "build.zig",
