@@ -4,7 +4,7 @@
 [pass] Benchmarks complete.
 [fail] Benchmarks failed.
 bench(args..):
-    uv run bench.py {{args}}
+    python3 bench.py {{args}}
 
 [help] Clean build output and caches
 [pass] Clean complete.
