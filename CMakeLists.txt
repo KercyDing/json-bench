@@ -5,7 +5,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     simdjson
-    URL https://github.com/simdjson/simdjson/archive/refs/tags/v4.6.9.tar.gz
+    URL https://github.com/simdjson/simdjson/archive/refs/tags/v4.6.11.tar.gz
 )
 FetchContent_Declare(
     glaze
