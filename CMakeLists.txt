@@ -11,14 +11,19 @@ FetchContent_Declare(
     glaze
     URL https://github.com/stephenberry/glaze/archive/refs/tags/v8.3.0.tar.gz
 )
-FetchContent_MakeAvailable(simdjson glaze)
+FetchContent_Declare(
+    yyjson
+    URL https://github.com/ibireme/yyjson/archive/refs/tags/0.13.0.tar.gz
+    SOURCE_SUBDIR do-not-build
+)
+FetchContent_MakeAvailable(simdjson glaze yyjson)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(yyjson_bench c/yyjson_bench.c c/yyjson/yyjson.c)
-target_include_directories(yyjson_bench PRIVATE c/yyjson)
+add_executable(yyjson_bench c/yyjson_bench.c ${yyjson_SOURCE_DIR}/src/yyjson.c)
+target_include_directories(yyjson_bench PRIVATE ${yyjson_SOURCE_DIR}/src)
 target_link_libraries(yyjson_bench PRIVATE m)
 
 add_executable(simdjson_bench cpp/simdjson_bench.cpp)

@@ -79,7 +79,7 @@ the report.
 | --- | --- |
 | `bench.py` | Build, run, and report driver. |
 | `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
-| `c/` | yyjson benchmark and the vendored yyjson sources. |
+| `c/` | yyjson benchmark. |
 | `cpp/` | simdjson and Glaze benchmarks. |
 | `rust/` | sonic-rs benchmark. |
 | `data/json/` | Corpus. |
