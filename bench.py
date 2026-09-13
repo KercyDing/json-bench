@@ -174,6 +174,8 @@ TASKS = (
     ("Get element", "get"),
 )
 TASK_LABELS = {token: label for label, token in TASKS}
+# `get` reads a single element, so byte throughput over the input is meaningless.
+NO_THROUGHPUT_TASKS = frozenset({TASK_LABELS["get"]})
 ALL_TOKENS = tuple(token for _, token in TASKS)
 JSON_TOKENS = {
     "serde": ("known-encode", "known-decode"),
@@ -561,9 +563,12 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
             for dataset in ALL_DATASETS
             if any((implementation, dataset, task) in by_key for implementation in implementations)
         ]
+        show_throughput = task not in NO_THROUGHPUT_TASKS
         headers = []
         for implementation in implementations:
-            headers += [f"{implementation} GB/s", f"{implementation} ns/op", f"{implementation} ops/s"]
+            if show_throughput:
+                headers.append(f"{implementation} GB/s")
+            headers += [f"{implementation} ns/op", f"{implementation} ops/s"]
         lines.extend(
             [
                 f"## {FORMAT_LABEL} · {task}",
@@ -577,13 +582,14 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
             for implementation in implementations:
                 row = by_key.get((implementation, dataset, task))
                 if row is None:
-                    values += ["-", "-", "-"]
-                else:
-                    values += [
-                        f"{float(row['throughput_gb_s']):.3f}",
-                        f"{float(row['latency_ns']):.2f}",
-                        f"{float(row['ops_per_s']):,.0f}",
-                    ]
+                    values += ["-"] * (3 if show_throughput else 2)
+                    continue
+                if show_throughput:
+                    values.append(f"{float(row['throughput_gb_s']):.3f}")
+                values += [
+                    f"{float(row['latency_ns']):.2f}",
+                    f"{float(row['ops_per_s']):,.0f}",
+                ]
             lines.append(f"| {dataset.removesuffix('.json')} | " + " | ".join(values) + " |")
         lines.append("")
 
@@ -592,7 +598,7 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
 
 
 def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
-    """One table per task: aggregate GB/s and speedup per thread count."""
+    """One table per task: aggregate rate and speedup per thread count."""
     parallel = [row for row in rows if int(row.get("threads", 1)) > 1]
     if not parallel:
         return []
@@ -608,8 +614,9 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
         "## Parallel scaling",
         "",
         (
-            "Aggregate throughput per thread count, summed over each task's datasets, "
-            "with the speedup relative to one thread in parentheses."
+            "Aggregate rate per thread count, summed over each task's datasets, with "
+            "the speedup relative to one thread in parentheses. Element reads are "
+            "summed in operations per second instead of bytes per second."
         ),
         "",
     ]
@@ -621,9 +628,10 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
         ]
         if not implementations:
             continue
+        unit = "ops/s" if task in NO_THROUGHPUT_TASKS else "GB/s"
         lines.extend(
             [
-                f"### {FORMAT_LABEL} · {task}",
+                f"### {FORMAT_LABEL} · {task} ({unit})",
                 "",
                 "| Implementation | " + " | ".join(f"{count} threads" for count in counts) + " |",
                 "| --- | " + " | ".join("---:" for _ in counts) + " |",
@@ -634,18 +642,24 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
             baseline = baselines[(task, implementation)]
             for count in counts:
                 total = totals.get((task, implementation, count), 0.0)
-                cells.append(f"{total:.2f} ({total / baseline:.2f}×)")
+                rate = f"{total:,.0f}" if task in NO_THROUGHPUT_TASKS else f"{total:.2f}"
+                cells.append(f"{rate} ({total / baseline:.2f}×)")
             lines.append(f"| {implementation} | " + " | ".join(cells) + " |")
         lines.append("")
     return lines
 
 
 def thread_totals(rows: Sequence[SummaryRow]) -> dict[tuple[str, str, int], float]:
-    """GB/s summed over datasets, per (task, implementation, threads)."""
+    """Aggregate rate summed over datasets, per (task, implementation, threads).
+
+    Tasks that move no payload (`NO_THROUGHPUT_TASKS`) are summed in operations
+    per second instead of bytes per second.
+    """
     totals: dict[tuple[str, str, int], float] = {}
     for row in rows:
         key = (str(row["task"]), str(row["implementation"]), int(row.get("threads", 1)))
-        totals[key] = totals.get(key, 0.0) + float(row["throughput_gb_s"])
+        scale = float(row["ops_per_s"]) if str(row["task"]) in NO_THROUGHPUT_TASKS else float(row["throughput_gb_s"])
+        totals[key] = totals.get(key, 0.0) + scale
     return totals
 
 
@@ -682,6 +696,8 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
     chart_counter = 0
     # metric key -> (axis title, decimals for tooltips)
     CHART_METRICS = (("gb", "GB/s", 3), ("ops", "ops/s", 0))
+    # `get` moves no payload, so it charts the access latency instead.
+    LATENCY_CHART_METRICS = (("ns", "ns/op", 2), ("ops", "ops/s", 0))
 
     def chart_html(
         categories: list[str],
@@ -740,6 +756,8 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
                 return None
             if metric == "gb":
                 return float(row["throughput_gb_s"])
+            if metric == "ns":
+                return float(row["latency_ns"])
             if metric == "ops":
                 return float(row["ops_per_s"])
             raise ValueError(f"unknown metric {metric!r}")
@@ -804,16 +822,22 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
                     "showInLegend": False,
                 }
             )
+            unit = "ops/s" if task in NO_THROUGHPUT_TASKS else "GB/s"
+            point_format = (
+                "{series.name}: <b>{point.y:,.0f} ops/s</b><br/>"
+                if task in NO_THROUGHPUT_TASKS
+                else "{series.name}: <b>{point.y:.3f} GB/s</b><br/>"
+            )
             pair = [
                 card(
-                    f"{label} \u00b7 {task} \u00b7 GB/s by thread count",
+                    f"{label} \u00b7 {task} \u00b7 {unit} by thread count",
                     chart_html(
                         categories,
                         throughput,
                         380,
                         f"{FORMAT}-{token}-scaling",
-                        "GB/s",
-                        "{series.name}: <b>{point.y:.3f} GB/s</b><br/>",
+                        unit,
+                        point_format,
                         kind="line",
                         x_title="threads",
                     ),
@@ -856,8 +880,9 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
         ]
         if not implementations_present:
             continue
+        metrics = LATENCY_CHART_METRICS if task in NO_THROUGHPUT_TASKS else CHART_METRICS
         pair: list[str] = []
-        for metric, unit, decimals in CHART_METRICS:
+        for metric, unit, decimals in metrics:
             series = collect_series(
                 [(implementation, task, group) for implementation in implementations_present],
                 metric,
