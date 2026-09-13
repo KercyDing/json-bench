@@ -1,12 +1,13 @@
 """Run zig-serde-bench and open the interactive result pages.
 
-Four user tasks are measured, each run by the JSON implementations that
+Five user tasks are measured, each run by the JSON implementations that
 support it:
 
-* Encode known data      (known-encode)
-* Decode known data      (known-decode)
+* Encode known data      (known-encode)     Zig only
+* Decode known data      (known-decode)     Zig only
 * Load arbitrary data    (arbitrary-decode)
 * Transform data         (transform)
+* Get element            (get)
 
 The Zig programs already perform warmup and repeat each fixture according to
 its size and print one task-tagged metric line per dataset. This driver runs
@@ -164,28 +165,38 @@ KNOWN_DATASETS = frozenset(
 ARBITRARY_DATASETS = frozenset(ALL_DATASETS) - {"small.json"}
 FORMAT = "json"
 FORMAT_LABEL = "JSON"
-IMPLEMENTATIONS = ("serde", "jsonz", "std.json")
+IMPLEMENTATIONS = ("jsonz", "std.json", "serde", "yyjson", "simdjson", "glaze", "sonic-rs")
 TASKS = (
     ("Encode known data", "known-encode"),
     ("Decode known data", "known-decode"),
     ("Load arbitrary data", "arbitrary-decode"),
     ("Transform data", "transform"),
+    ("Get element", "get"),
 )
 TASK_LABELS = {token: label for label, token in TASKS}
 ALL_TOKENS = tuple(token for _, token in TASKS)
 JSON_TOKENS = {
-    "serde": ALL_TOKENS,
+    "serde": ("known-encode", "known-decode"),
     "jsonz": ALL_TOKENS,
     "std.json": ALL_TOKENS,
+    "yyjson": ("arbitrary-decode", "transform", "get"),
+    "simdjson": ("arbitrary-decode", "get"),
+    "glaze": ("arbitrary-decode", "transform", "get"),
+    "sonic-rs": ("arbitrary-decode", "transform", "get"),
+}
+RUN_COMMANDS = {
+    "serde": ["zig-out/bin/serde_bench"],
+    "jsonz": ["zig-out/bin/jsonz_bench"],
+    "std.json": ["zig-out/bin/std_bench"],
+    "yyjson": ["./build/yyjson_bench"],
+    "simdjson": ["./build/simdjson_bench"],
+    "glaze": ["./build/glaze_bench"],
+    "sonic-rs": ["./target/release/sonic"],
 }
 
 
 def implementation_directory(implementation: str) -> str:
-    return {
-        "serde": "serde.zig",
-        "std.json": "std",
-        "jsonz": "jsonz",
-    }[implementation]
+    return implementation
 
 
 def supported_tokens(implementation: str) -> tuple[str, ...]:
@@ -253,7 +264,7 @@ class SummaryRow(TypedDict):
     stdev_ms: float
     throughput_mib_s: float
     throughput_gb_s: float
-    latency_us: float
+    latency_ns: float
     ops_per_s: float
     speedup: float
 
@@ -265,11 +276,8 @@ def parse_label(label: str) -> tuple[str, str]:
     without a known prefix is treated as serde and the trailing word is the
     token candidate.
     """
-    for prefix, implementation in (
-        ("std.json ", "std.json"),
-        ("jsonz ", "jsonz"),
-        ("serde ", "serde"),
-    ):
+    for implementation in IMPLEMENTATIONS:
+        prefix = implementation + " "
         if label.startswith(prefix):
             return implementation, label[len(prefix) :].strip()
     return "serde", label.strip()
@@ -318,23 +326,12 @@ def parse_output(output: str, run: int) -> list[Measurement]:
     return measurements
 
 
-def build_command(
-    implementation: str,
-    zig: str,
-    optimize: str | None,
-) -> list[str]:
-    """One command per implementation; the Zig side needs no other selector."""
-    if implementation == "jsonz":
-        step = "bench-json-jsonz"
-    elif implementation == "std.json":
-        step = "bench-json-std"
-    else:
-        step = "bench-json-serde"
-    build_args: list[str] = []
-    command = [zig, "build", step, *build_args]
-    if optimize:
-        command.append(f"-Doptimize={optimize}")
-    return command
+def build_all(zig: str, optimize: str) -> None:
+    """Build every language once, before any measurement."""
+    run_warmup([zig, "build", f"-Doptimize={optimize}"])
+    run_warmup(["cmake", "-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"])
+    run_warmup(["cmake", "--build", "build", "--parallel"])
+    run_warmup(["cargo", "build", "--release", "--bins"])
 
 
 def expected_measurements(implementation: str) -> set[tuple[str, str]]:
@@ -373,7 +370,7 @@ def run_benchmarks(
     zig: str,
     optimize: str,
     output_dir: Path,
-) -> tuple[list[Measurement], dict[tuple[str, str], list[str]]]:
+) -> tuple[list[Measurement], dict[str, list[str]]]:
     """Run every (format, implementation) once per thread count.
 
     Without ``parallel_limit`` that is a single process per run, as before. With
@@ -384,15 +381,14 @@ def run_benchmarks(
     """
     counts = (1,) if parallel_limit is None else thread_counts(parallel_limit)
     all_measurements: list[Measurement] = []
-    commands: dict[tuple[str, str], list[str]] = {}
-    for implementation in IMPLEMENTATIONS:
-        raw_dir = output_dir / FORMAT / implementation_directory(implementation)
-        command = build_command(implementation, zig, optimize)
-        commands[(FORMAT, implementation)] = command
+    commands = {implementation: list(RUN_COMMANDS[implementation]) for implementation in IMPLEMENTATIONS}
+
+    build_all(zig, optimize)
+
     for threads in counts:
         print(f"=== warmup at {threads} thread(s) ===", flush=True)
         for implementation in IMPLEMENTATIONS:
-            run_warmup(commands[(FORMAT, implementation)])
+            run_warmup(commands[implementation])
 
         for run in range(1, runs + 1):
             # Rotate the order each round so no implementation is always first
@@ -401,7 +397,7 @@ def run_benchmarks(
             order = IMPLEMENTATIONS[offset:] + IMPLEMENTATIONS[:offset]
             for implementation in order:
                 raw_dir = output_dir / FORMAT / implementation_directory(implementation)
-                command = commands[(FORMAT, implementation)]
+                command = commands[implementation]
                 label = f"{FORMAT}/{implementation}"
                 stem = "tasks" if counts == (1,) else f"tasks-t{threads:02d}"
                 print(
@@ -463,9 +459,9 @@ def aggregate(measurements: Iterable[Measurement]) -> list[SummaryRow]:
         batch_ms: list[float] = []
         for samples in runs.values():
             batch_rates.append(
-                sum(sample.measured_bytes / (sample.milliseconds / 1000.0) for sample in samples)
+                sum(sample.measured_bytes / (max(sample.milliseconds, 1e-9) / 1000.0) for sample in samples)
             )
-            batch_ops.append(sum(1000.0 / sample.milliseconds for sample in samples))
+            batch_ops.append(sum(1000.0 / max(sample.milliseconds, 1e-9) for sample in samples))
             batch_ms.append(statistics.median(sample.milliseconds for sample in samples))
 
         durations = [sample.milliseconds for samples in runs.values() for sample in samples]
@@ -488,7 +484,7 @@ def aggregate(measurements: Iterable[Measurement]) -> list[SummaryRow]:
                 "stdev_ms": statistics.stdev(durations) if len(durations) > 1 else 0.0,
                 "throughput_mib_s": throughput_mib_s,
                 "throughput_gb_s": throughput_mib_s * (1024.0 * 1024.0) / 1_000_000_000.0,
-                "latency_us": statistics.median(batch_ms) * 1000.0,
+                "latency_ns": statistics.median(batch_ms) * 1_000_000.0,
                 "ops_per_s": statistics.median(batch_ops),
                 "speedup": 0.0,
             }
@@ -525,7 +521,7 @@ def write_csv(path: Path, rows: Sequence[SummaryRow]) -> None:
         "stdev_ms",
         "throughput_mib_s",
         "throughput_gb_s",
-        "latency_us",
+        "latency_ns",
         "ops_per_s",
         "speedup",
     ]
@@ -548,7 +544,7 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
         (
             f"Median of {runs} run(s). Throughput is the median of the per-run aggregate "
             "rates over the measured payload (encoded output bytes when reported, "
-            "otherwise input bytes); latency is the median `ms/op`."
+            "otherwise input bytes); latency is the median `ns/op`."
         ),
         "",
     ]
@@ -567,7 +563,7 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
         ]
         headers = []
         for implementation in implementations:
-            headers += [f"{implementation} GB/s", f"{implementation} µs/op", f"{implementation} ops/s"]
+            headers += [f"{implementation} GB/s", f"{implementation} ns/op", f"{implementation} ops/s"]
         lines.extend(
             [
                 f"## {FORMAT_LABEL} · {task}",
@@ -585,7 +581,7 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
                 else:
                     values += [
                         f"{float(row['throughput_gb_s']):.3f}",
-                        f"{float(row['latency_us']):.2f}",
+                        f"{float(row['latency_ns']):.2f}",
                         f"{float(row['ops_per_s']):,.0f}",
                     ]
             lines.append(f"| {dataset.removesuffix('.json')} | " + " | ".join(values) + " |")
@@ -659,6 +655,10 @@ def load_summary(path: Path) -> tuple[list[SummaryRow], int]:
     if not isinstance(rows, list):
         raise TypeError(f"{path} does not contain a summary array")
     runs = int(payload.get("metadata", {}).get("runs", 1))
+    for row in rows:
+        # Older summaries stored microseconds.
+        if "latency_ns" not in row:
+            row["latency_ns"] = float(row.get("latency_us", 0.0)) * 1000.0
     return cast(list[SummaryRow], rows), runs
 
 
@@ -977,8 +977,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "parallel": parallel_limit,
             "threads": list(thread_counts(parallel_limit)) if parallel_limit else [1],
             "commands": {
-                f"{format_name}/{implementation}": command
-                for (format_name, implementation), command in commands.items()
+                f"{FORMAT}/{implementation}": command
+                for implementation, command in commands.items()
             },
         }
 

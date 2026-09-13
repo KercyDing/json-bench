@@ -31,6 +31,11 @@ pub fn run(comptime Adapter: type, init: std.process.Init.Minimal) !void {
             if (!std.mem.eql(u8, dataset, "small.json")) {
                 try decode(Adapter, Adapter.Arbitrary, "arbitrary-decode", input, repeats);
                 try transform(Adapter, Adapter.Arbitrary, input, repeats);
+                inline for (shared.get_paths) |entry| {
+                    if (std.mem.eql(u8, dataset, entry.name)) {
+                        try get(Adapter, Adapter.Arbitrary, input, repeats, entry.path);
+                    }
+                }
             }
         }
     }
@@ -101,6 +106,26 @@ fn transform(comptime Adapter: type, comptime T: type, input: []const u8, repeat
         shared.input_allocator.free(output);
     }
     report(Adapter.name ++ " transform", input.len, repeats, elapsed, null);
+}
+
+fn get(comptime Adapter: type, comptime T: type, input: []const u8, repeats: usize, comptime pointer: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(shared.input_allocator);
+    defer arena.deinit();
+    var value = try Adapter.decode(T, arena.allocator(), input);
+    defer deinitValue(Adapter, &value);
+
+    Adapter.get(value, pointer);
+
+    // The access is tens of nanoseconds, so time a batch instead of paying the
+    // clock overhead on every access.
+    const batch = 1024;
+    var elapsed: u64 = 0;
+    for (0..repeats) |_| {
+        const start = shared.nowNanoseconds();
+        for (0..batch) |_| Adapter.get(value, pointer);
+        elapsed += @max(shared.nowNanoseconds() - start, 1);
+    }
+    report(Adapter.name ++ " get", input.len, repeats * batch, elapsed, null);
 }
 
 fn deinitValue(comptime Adapter: type, value: anytype) void {

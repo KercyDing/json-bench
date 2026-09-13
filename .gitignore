@@ -1,6 +1,8 @@
 .zig-cache/
 zig-out/
 zig-pkg/
+build/
+target/
 results/
 __pycache__/
 .ruff_cache

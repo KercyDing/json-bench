@@ -62,3 +62,35 @@ pub fn repeatCount(size: usize) usize {
 pub inline fn nowNanoseconds() u64 {
     return @intCast(std.Io.Clock.awake.now(std.Options.debug_io).nanoseconds);
 }
+
+/// The RFC 6901 pointer the `get` task reads for each dataset.
+pub const get_paths = [_]struct { name: []const u8, path: []const u8 }{
+    .{ .name = "canada.json", .path = "/features/0/geometry/coordinates/0/0" },
+    .{ .name = "citm_catalog.json", .path = "/areaNames/205705993" },
+    .{ .name = "fgo.json", .path = "/mstSvt/0/relateQuestIds/0" },
+    .{ .name = "github_events.json", .path = "/0/actor/login" },
+    .{ .name = "gsoc-2018.json", .path = "/0/name" },
+    .{ .name = "lottie.json", .path = "/assets/0/layers/0/nm" },
+    .{ .name = "otfcc.json", .path = "/head/version" },
+    .{ .name = "poet.json", .path = "/0/name" },
+    .{ .name = "twitter.json", .path = "/statuses/0/user/id" },
+    .{ .name = "twitterescaped.json", .path = "/statuses/0/user/id" },
+};
+
+/// Splits a pointer into reference tokens for libraries without a pointer API.
+/// The benchmark paths contain no `~0`/`~1` escapes.
+pub fn pointerTokens(comptime pointer: []const u8) [pointerTokenCount(pointer)][]const u8 {
+    var tokens: [pointerTokenCount(pointer)][]const u8 = undefined;
+    var rest: []const u8 = pointer[1..];
+    for (&tokens) |*token| {
+        const end = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
+        token.* = rest[0..end];
+        rest = if (end < rest.len) rest[end + 1 ..] else "";
+    }
+    return tokens;
+}
+
+fn pointerTokenCount(comptime pointer: []const u8) usize {
+    if (pointer.len == 0) return 0;
+    return std.mem.count(u8, pointer, "/");
+}

@@ -122,7 +122,7 @@ fn parseObject(allocator: Allocator, deserializer: anytype) ErrorOf(@TypeOf(dese
 
 const Adapter = struct {
     pub const name = "serde";
-    pub const supports_arbitrary = true;
+    pub const supports_arbitrary = false;
     pub const Arbitrary = Value;
 
     pub fn decode(comptime T: type, allocator: std.mem.Allocator, input: []const u8) !T {

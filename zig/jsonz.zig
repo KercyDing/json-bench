@@ -17,6 +17,11 @@ const Adapter = struct {
         return jsonz.typed.toSlice(allocator, value, .{});
     }
 
+    pub fn get(value: jsonz.dom.Document, comptime pointer: []const u8) void {
+        const node = value.ptrGet(pointer) catch return;
+        std.mem.doNotOptimizeAway(node);
+    }
+
     pub fn deinit(value: anytype) void {
         if (comptime @TypeOf(value.*) == Arbitrary) value.deinit();
     }
