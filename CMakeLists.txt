@@ -29,6 +29,5 @@ add_executable(glaze_bench cpp/glaze_bench.cpp)
 target_include_directories(glaze_bench PRIVATE cpp ${glaze_SOURCE_DIR}/include)
 
 foreach(target yyjson_bench simdjson_bench glaze_bench)
-    target_compile_definitions(${target} PRIVATE BENCH_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/json")
     target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:-O3;-march=native>)
 endforeach()
