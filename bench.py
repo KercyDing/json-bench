@@ -996,7 +996,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.no_build:
         measurements: list[Measurement] = []
-        commands: dict[tuple[str, str], list[str]] = {}
+        commands: dict[str, list[str]] = {}
         metadata: dict[str, object] = {}
     else:
         parallel_limit = None if args.parallel is None else (args.parallel or machine_threads())
