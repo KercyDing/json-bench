@@ -331,8 +331,10 @@ def parse_output(output: str, run: int) -> list[Measurement]:
 def build_all(zig: str, optimize: str) -> None:
     """Build every language once, before any measurement."""
     run_warmup([zig, "build", f"-Doptimize={optimize}", "-Dcpu=native"])
-    run_warmup(["cmake", "-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"])
-    run_warmup(["cmake", "--build", "build", "--parallel"])
+    # CMakePresets.json pins generator, build type, and binary dir so an editor
+    # session and this script always share one configuration.
+    run_warmup(["cmake", "--preset", "release"])
+    run_warmup(["cmake", "--build", "--preset", "release"])
     run_warmup(["cargo", "build", "--release", "--bins"])
 
 

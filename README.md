@@ -78,6 +78,7 @@ the report.
 | Path | Contents |
 | --- | --- |
 | `bench.py` | Build, run, and report driver. |
+| `CMakePresets.json` | The `release` preset (`Unix Makefiles`, `Release`, `build/`) shared by `bench.py` and editors; keeps cached generator/build type from drifting. |
 | `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
 | `c/` | yyjson benchmark. |
 | `cpp/` | simdjson and Glaze benchmarks. |
