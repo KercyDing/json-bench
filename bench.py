@@ -905,10 +905,8 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
                     ),
                 )
             )
-        if len(pair) == 1:
-            sections.append(pair[0])
-        else:
-            sections.append("<div class=\"plot-row\">\n" + "\n".join(pair) + "\n</div>")
+        row_class = "plot-row single" if len(pair) == 1 else "plot-row"
+        sections.append(f'<div class="{row_class}">\n' + "\n".join(pair) + "\n</div>")
 
     sections.extend(scaling_sections(label))
 
@@ -941,6 +939,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
   section.plot {{ max-width: 1000px; margin: 0 auto 28px; background: #ffffff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); }}
   .plot-row {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; max-width: 1320px; margin: 0 auto 28px; align-items: start; }}
   .plot-row section.plot {{ max-width: none; margin: 0; }}
+  @media (min-width: 901px) {{ .plot-row.single section.plot {{ grid-column: 2; }} }}
   @media (max-width: 900px) {{ .plot-row {{ grid-template-columns: minmax(0, 1fr); }} }}
   .hc-container {{ width: 100%; }}
   footer {{ max-width: 1000px; margin: 4px auto 0; color: #718096; font-size: 12px; text-align: center; }}
