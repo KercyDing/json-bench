@@ -881,6 +881,9 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
         if not implementations_present:
             continue
         metrics = LATENCY_CHART_METRICS if task in NO_THROUGHPUT_TASKS else CHART_METRICS
+        if task == TASKS[-1][0]:
+            # The final task keeps only ops/s; its ns/op chart was redundant.
+            metrics = tuple(metric for metric in metrics if metric[0] != "ns")
         pair: list[str] = []
         for metric, unit, decimals in metrics:
             series = collect_series(
@@ -900,7 +903,10 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
                     ),
                 )
             )
-        sections.append("<div class=\"plot-row\">\n" + "\n".join(pair) + "\n</div>")
+        if len(pair) == 1:
+            sections.append(pair[0])
+        else:
+            sections.append("<div class=\"plot-row\">\n" + "\n".join(pair) + "\n</div>")
 
     sections.extend(scaling_sections(label))
 
