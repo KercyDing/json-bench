@@ -12,6 +12,10 @@ const Adapter = struct {
         return jsonz.typed.parseBorrowed(T, allocator, input, .{ .ignore_unknown_fields = true });
     }
 
+    pub fn decodeBorrowed(allocator: std.mem.Allocator, buffer: []u8, input_len: usize) !Arbitrary {
+        return jsonz.dom.parseBorrowed(allocator, buffer, input_len, .{});
+    }
+
     pub fn encode(allocator: std.mem.Allocator, value: anytype) ![]u8 {
         if (@TypeOf(value) == Arbitrary) return value.toSlice(allocator, .{});
         return jsonz.typed.toSlice(allocator, value, .{});

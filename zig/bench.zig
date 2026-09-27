@@ -29,7 +29,11 @@ pub fn run(comptime Adapter: type, init: std.process.Init.Minimal) !void {
         }
         if (comptime Adapter.supports_arbitrary) {
             if (!std.mem.eql(u8, dataset, "small.json")) {
-                try decode(Adapter, Adapter.Arbitrary, "arbitrary-decode", input, repeats);
+                if (comptime @hasDecl(Adapter, "decodeBorrowed")) {
+                    try decodeBorrowed(Adapter, input, repeats);
+                } else {
+                    try decode(Adapter, Adapter.Arbitrary, "arbitrary-decode", input, repeats);
+                }
                 try transform(Adapter, Adapter.Arbitrary, input, repeats);
                 inline for (shared.get_paths) |entry| {
                     if (std.mem.eql(u8, dataset, entry.name)) {
@@ -71,6 +75,31 @@ fn decode(comptime Adapter: type, comptime T: type, comptime task: []const u8, i
         deinitValue(Adapter, &value);
     }
     report(Adapter.name ++ " " ++ task, input.len, repeats, elapsed, null);
+}
+
+fn decodeBorrowed(comptime Adapter: type, input: []const u8, repeats: usize) !void {
+    const buffer = try shared.input_allocator.alloc(u8, input.len + 4);
+    defer shared.input_allocator.free(buffer);
+    @memcpy(buffer[0..input.len], input);
+    @memset(buffer[input.len..], 0);
+
+    var warmup_arena = std.heap.ArenaAllocator.init(shared.input_allocator);
+    defer warmup_arena.deinit();
+    var warmup = try Adapter.decodeBorrowed(warmup_arena.allocator(), buffer, input.len);
+    deinitValue(Adapter, &warmup);
+
+    var elapsed: u64 = 0;
+    for (0..repeats) |_| {
+        @memcpy(buffer[0..input.len], input);
+        var arena = std.heap.ArenaAllocator.init(shared.input_allocator);
+        defer arena.deinit();
+        const start = shared.nowNanoseconds();
+        var value = try Adapter.decodeBorrowed(arena.allocator(), buffer, input.len);
+        elapsed += @max(shared.nowNanoseconds() - start, 1);
+        std.mem.doNotOptimizeAway(value);
+        deinitValue(Adapter, &value);
+    }
+    report(Adapter.name ++ " arbitrary-decode", input.len, repeats, elapsed, null);
 }
 
 fn encode(comptime Adapter: type, comptime T: type, input: []const u8, repeats: usize) !void {
