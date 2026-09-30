@@ -82,6 +82,60 @@ def thread_counts(limit: int) -> tuple[int, ...]:
     return tuple(counts)
 
 
+def cpu_model() -> str | None:
+    """The CPU this ran on, so a result says which machine produced it."""
+    if os.name == "nt":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+            ) as key:
+                return str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip()
+        except OSError:
+            return None
+    if sys.platform == "darwin":
+        return command_version(["sysctl", "-n", "machdep.cpu.brand_string"])
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if line.startswith("model name"):
+                    return line.partition(":")[2].strip() or None
+    except OSError:
+        pass
+    return None
+
+
+def command_version(command: Sequence[str]) -> str | None:
+    """First line of a version command, or ``None`` when it cannot be run."""
+    try:
+        completed = subprocess.run(
+            list(command),
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    except OSError:
+        return None
+    lines = completed.stdout.decode(errors="replace").strip().splitlines()
+    return lines[0].strip() if lines else None
+
+
+def toolchain(zig: str) -> dict[str, str]:
+    """Versions of the tools the C, C++, Rust, and Zig builds went through."""
+    commands = {
+        "zig": (zig, "version"),
+        "rustc": ("rustc", "--version"),
+        "cmake": ("cmake", "--version"),
+        "cc": (os.environ.get("CC", "cc"), "--version"),
+        "cxx": (os.environ.get("CXX", "c++"), "--version"),
+    }
+    versions = {name: command_version(command) for name, command in commands.items()}
+    return {name: version for name, version in versions.items() if version}
+
+
 def run_concurrently(
     *,
     label: str,
@@ -1008,6 +1062,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "project_root": str(ROOT),
             "python": platform.python_version(),
             "platform": platform.platform(),
+            "cpu": cpu_model(),
+            "toolchain": toolchain(zig),
             "runs": args.runs,
             "parallel": parallel_limit,
             "threads": list(thread_counts(parallel_limit)) if parallel_limit else [1],
