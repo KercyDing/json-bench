@@ -36,18 +36,18 @@ jobs:
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: python3 bench.py
+        run: python3 bench.py --runs 50
       - name: Bench (MSYS2)
         if: matrix.os == 'windows'
         shell: msys2 {0}
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: python bench.py
+        run: python bench.py --runs 50
       - uses: actions/upload-artifact@v7
         with:
           name: json-bench-${{ matrix.os }}-${{ matrix.arch }}
-          path: results/
+          path: results/json/
 
   release:
     needs: bench
