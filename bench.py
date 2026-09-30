@@ -220,7 +220,7 @@ KNOWN_DATASETS = frozenset(
 ARBITRARY_DATASETS = frozenset(ALL_DATASETS) - {"small.json"}
 FORMAT = "json"
 FORMAT_LABEL = "JSON"
-IMPLEMENTATIONS = ("jsonz", "std.json", "serde", "yyjson", "simdjson", "glaze", "sonic-rs")
+IMPLEMENTATIONS = ("jsonz", "std.json", "serde", "yyjson", "simdjson", "glaze", "sonic-rs", "simd-json")
 TASKS = (
     ("Encode known data", "known-encode"),
     ("Decode known data", "known-decode"),
@@ -240,6 +240,7 @@ JSON_TOKENS = {
     "simdjson": ("arbitrary-decode", "get"),
     "glaze": ("arbitrary-decode", "transform", "get"),
     "sonic-rs": ("arbitrary-decode", "transform", "get"),
+    "simd-json": ("arbitrary-decode", "transform", "get"),
 }
 RUN_COMMANDS = {
     "serde": ["zig-out/bin/serde_bench"],
@@ -249,6 +250,7 @@ RUN_COMMANDS = {
     "simdjson": ["./build/simdjson_bench"],
     "glaze": ["./build/glaze_bench"],
     "sonic-rs": ["./target/release/sonic"],
+    "simd-json": ["./target/release/simd_json"],
 }
 # CMakePresets.json hides the release preset that does not match this host.
 CMAKE_PRESET = "release-windows" if os.name == "nt" else "release"

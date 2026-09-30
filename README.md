@@ -17,6 +17,7 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 | `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, get |
 | `glaze` | C++ | [stephenberry/glaze](https://github.com/stephenberry/glaze) | load, transform, get |
 | `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, get |
+| `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, get |
 
 `serde.zig` has no DOM, so it is left out of the DOM tasks instead of being
 compared on an API it does not have. `simdjson` is read-only, so it has no
@@ -43,7 +44,9 @@ The first two need a schema, so they only run for the Zig libraries.
   (in-place escape decoding needs a mutable, padded copy), `simdjson` builds a
   fresh `padded_string`, and `simd-json` clones the buffer. The timed region
   includes whatever the implementation itself does, copy included — this is a
-  real design difference, not a shared cost.
+  real design difference, not a shared cost. Every implementation also runs on
+  the platform's default allocator, though `simd-json` asks for
+  `mimalloc`/`jemalloc` and `snmalloc`.
 - **`get` amortizes the clock.** A single access is only tens of nanoseconds, so
   every sample resolves the element 1024 times between the two clock reads. The
   clock overhead is then under 0.1% of the reported `ns/op`. The other tasks are
@@ -86,7 +89,7 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 | `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
 | `c/` | yyjson benchmark. |
 | `cpp/` | simdjson and Glaze benchmarks. |
-| `rust/` | sonic-rs benchmark. |
+| `rust/` | sonic-rs and simd-json benchmarks. |
 | `data/json/` | Corpus. |
 | `results/` | Generated reports (gitignored). |
 
