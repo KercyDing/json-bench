@@ -132,6 +132,7 @@ def run_concurrently(
 
 def run_warmup(command: Sequence[str]) -> None:
     """Run one implementation once to populate build/runtime caches."""
+    print(f"$ {' '.join(command)}", flush=True)
     completed = subprocess.run(
         list(command),
         cwd=ROOT,
