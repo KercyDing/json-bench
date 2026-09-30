@@ -195,6 +195,8 @@ RUN_COMMANDS = {
     "glaze": ["./build/glaze_bench"],
     "sonic-rs": ["./target/release/sonic"],
 }
+# CMakePresets.json hides the release preset that does not match this host.
+CMAKE_PRESET = "release-windows" if os.name == "nt" else "release"
 
 
 def implementation_directory(implementation: str) -> str:
@@ -333,8 +335,8 @@ def build_all(zig: str, optimize: str) -> None:
     run_warmup([zig, "build", f"-Doptimize={optimize}", "-Dcpu=native"])
     # CMakePresets.json pins generator, build type, and binary dir so an editor
     # session and this script always share one configuration.
-    run_warmup(["cmake", "--preset", "release"])
-    run_warmup(["cmake", "--build", "--preset", "release"])
+    run_warmup(["cmake", "--preset", CMAKE_PRESET])
+    run_warmup(["cmake", "--build", "--preset", CMAKE_PRESET])
     run_warmup(["cargo", "build", "--release", "--bins"])
 
 

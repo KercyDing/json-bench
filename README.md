@@ -65,6 +65,9 @@ python3 bench.py
 by median, writes `results/json/{summary.csv,summary.md,index.html}`, and opens
 the report.
 
+On Windows the C/C++ build uses `release-windows`, the same preset with the
+`Ninja` generator, since `make` is not available there.
+
 ## Options
 
 | Option | Description |
@@ -78,7 +81,7 @@ the report.
 | Path | Contents |
 | --- | --- |
 | `bench.py` | Build, run, and report driver. |
-| `CMakePresets.json` | The `release` preset (`Unix Makefiles`, `Release`, `build/`) shared by `bench.py` and editors; keeps cached generator/build type from drifting. |
+| `CMakePresets.json` | The `release` preset (`Unix Makefiles`, `Release`, `build/`) shared by `bench.py` and editors; keeps cached generator/build type from drifting. `release-windows` is the same preset with `Ninja`. |
 | `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
 | `c/` | yyjson benchmark. |
 | `cpp/` | simdjson and Glaze benchmarks. |

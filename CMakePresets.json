@@ -7,14 +7,36 @@
   },
   "configurePresets": [
     {
-      "name": "release",
-      "displayName": "Release (native)",
-      "description": "The configuration bench.py builds the C/C++ benchmarks with.",
-      "generator": "Unix Makefiles",
+      "name": "base",
+      "hidden": true,
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release (native)",
+      "description": "The configuration bench.py builds the C/C++ benchmarks with.",
+      "generator": "Unix Makefiles",
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "release-windows",
+      "inherits": "base",
+      "displayName": "Release (native)",
+      "description": "Same as `release`, with Ninja: Windows has no `make`.",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     }
   ],
@@ -22,7 +44,22 @@
     {
       "name": "release",
       "configurePreset": "release",
-      "jobs": 0
+      "jobs": 0,
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "release-windows",
+      "configurePreset": "release-windows",
+      "jobs": 0,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     }
   ]
 }
