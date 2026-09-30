@@ -14,14 +14,15 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 | `std.json` | Zig | Zig standard library | all |
 | `serde` | Zig | [OrlovEvgeny/serde.zig](https://github.com/OrlovEvgeny/serde.zig) | encode, decode |
 | `yyjson` | C | [ibireme/yyjson](https://github.com/ibireme/yyjson) | load, transform, get |
-| `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, get |
+| `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, transform, get |
 | `glaze` | C++ | [stephenberry/glaze](https://github.com/stephenberry/glaze) | load, transform, get |
 | `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, get |
 | `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, get |
 
 `serde.zig` has no DOM, so it is left out of the DOM tasks instead of being
-compared on an API it does not have. `simdjson` is read-only, so it has no
-`transform`.
+compared on an API it does not have. `simdjson`'s DOM is immutable — there is no
+way to edit a parsed tree — so its `transform` serializes what it parsed with
+`minify()`.
 
 ## Tasks
 

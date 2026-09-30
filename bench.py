@@ -275,7 +275,7 @@ JSON_TOKENS = {
     "jsonz": ALL_TOKENS,
     "std.json": ALL_TOKENS,
     "yyjson": ("arbitrary-decode", "transform", "get"),
-    "simdjson": ("arbitrary-decode", "get"),
+    "simdjson": ("arbitrary-decode", "transform", "get"),
     "glaze": ("arbitrary-decode", "transform", "get"),
     "sonic-rs": ("arbitrary-decode", "transform", "get"),
     "simd-json": ("arbitrary-decode", "transform", "get"),

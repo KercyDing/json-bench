@@ -31,6 +31,27 @@ int main() {
         }
         bench::print_result("simdjson", "arbitrary-decode", source.size(), repeats, elapsed);
 
+        {
+            simdjson::padded_string input{source};
+            simdjson::dom::parser parser;
+            auto warmup = parser.parse(input);
+            if (warmup.error()) return 1;
+            bench::black_box(simdjson::minify(warmup.value_unsafe()));
+        }
+        elapsed = 0;
+        for (std::size_t i = 0; i < repeats; ++i) {
+            const auto start = bench::now_ns();
+            simdjson::padded_string input{source};
+            simdjson::dom::parser parser;
+            auto document = parser.parse(input);
+            if (document.error()) return 1;
+            const auto output = simdjson::minify(document.value_unsafe());
+            const auto end = bench::now_ns();
+            bench::black_box(output);
+            elapsed += std::max<std::uint64_t>(1, end - start);
+        }
+        bench::print_result("simdjson", "transform", source.size(), repeats, elapsed);
+
         simdjson::padded_string input{source};
         simdjson::dom::parser parser;
         auto document = parser.parse(input);
