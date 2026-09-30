@@ -67,5 +67,8 @@ jobs:
           done
       - name: Publish release
         run: |
-          tag="$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
+          tag="$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            tag="$tag-${GITHUB_RUN_NUMBER}"
+          fi
           gh release create "$tag" --title "$tag" artifacts/*.zip
