@@ -1,0 +1,71 @@
+name: bench
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    name: ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux,   arch: x64,   runner: ubuntu-24.04,     cc: gcc,   cxx: g++ }
+          - { os: linux,   arch: arm64, runner: ubuntu-24.04-arm, cc: gcc,   cxx: g++ }
+          - { os: macos,   arch: x64,   runner: macos-15-intel,   cc: clang, cxx: clang++ }
+          - { os: macos,   arch: arm64, runner: macos-15,         cc: clang, cxx: clang++ }
+          - { os: windows, arch: x64,   runner: windows-2025,     cc: gcc,   cxx: g++,   msystem: MINGW64,    packages: "mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja" }
+          - { os: windows, arch: arm64, runner: windows-11-arm,   cc: clang, cxx: clang++, msystem: CLANGARM64, packages: "mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-cmake mingw-w64-clang-aarch64-ninja" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: mlugg/setup-zig@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: msys2/setup-msys2@v2
+        if: matrix.os == 'windows'
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          install: ${{ matrix.packages }}
+      - name: Bench
+        if: matrix.os != 'windows'
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: python3 bench.py
+      - name: Bench (MSYS2)
+        if: matrix.os == 'windows'
+        shell: msys2 {0}
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: python bench.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: json-bench-${{ matrix.os }}-${{ matrix.arch }}
+          path: results/
+
+  release:
+    needs: bench
+    runs-on: ubuntu-24.04
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Zip results
+        run: |
+          cd artifacts
+          for dir in */; do
+            (cd "$dir" && zip -qr "../${dir%/}.zip" .)
+          done
+      - name: Publish release
+        run: |
+          tag="$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
+          gh release create "$tag" --title "$tag" artifacts/*.zip
