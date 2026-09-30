@@ -40,7 +40,7 @@ import statistics
 import subprocess
 import sys
 import webbrowser
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,6 +134,44 @@ def toolchain(zig: str) -> dict[str, str]:
     }
     versions = {name: command_version(command) for name, command in commands.items()}
     return {name: version for name, version in versions.items() if version}
+
+
+def timestamp(value: object) -> str:
+    """An ISO timestamp trimmed to the minute, or an empty string."""
+    text = str(value or "")
+    return f"{text[:10]} {text[11:16]} UTC" if len(text) >= 16 else text
+
+
+def version_of(value: object) -> str:
+    """The first dotted version in a tool's version banner, or an empty string."""
+    match = re.search(r"\d+(?:\.\d+)+", str(value or ""))
+    return match.group(0) if match else ""
+
+
+def tool_versions(toolchain: object) -> list[str]:
+    """``tool 1.2.3`` for every recorded tool, with one C++ compiler."""
+    if not isinstance(toolchain, dict) or not toolchain:
+        return []
+    parts = [
+        f"{name} {version}"
+        for name in ("zig", "rustc", "cmake")
+        if (version := version_of(toolchain.get(name)))
+    ]
+    cxx = version_of(toolchain.get("cxx")) or version_of(toolchain.get("cc"))
+    return [*parts, f"c++ {cxx}"] if cxx else parts
+
+
+def machine_lines(metadata: Mapping[str, object]) -> list[str]:
+    """The machine, the time, and the tools the measurements came from."""
+    parts = [str(metadata[key]).strip() for key in ("cpu", "platform") if metadata.get(key)]
+    stamp = timestamp(metadata.get("generated_at"))
+    if stamp:
+        parts.append(stamp)
+    lines = [" · ".join(parts)] if parts else []
+    tools = tool_versions(metadata.get("toolchain"))
+    if tools:
+        lines.append(" · ".join(tools))
+    return lines
 
 
 def run_concurrently(
@@ -594,16 +632,18 @@ def write_csv(path: Path, rows: Sequence[SummaryRow]) -> None:
         writer.writerows(rows)
 
 
-def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
+def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int, metadata: Mapping[str, object]) -> None:
     by_key = {
         (str(row["implementation"]), str(row["dataset"]), str(row["task"])): row
         for row in rows
         if int(row.get("threads", 1)) == 1
     }
 
+    machine = " · ".join(machine_lines(metadata))
     lines = [
         "# json-bench results",
         "",
+        *([machine, ""] if machine else []),
         (
             f"Median of {runs} run(s). Throughput is the median of the per-run aggregate "
             "rates over the measured payload (encoded output bytes when reported, "
@@ -724,23 +764,25 @@ def thread_totals(rows: Sequence[SummaryRow]) -> dict[tuple[str, str, int], floa
     return totals
 
 
-def load_summary(path: Path) -> tuple[list[SummaryRow], int]:
+def load_summary(path: Path) -> tuple[list[SummaryRow], int, dict[str, object]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     rows = payload.get("summary")
     if not isinstance(rows, list):
         raise TypeError(f"{path} does not contain a summary array")
-    runs = int(payload.get("metadata", {}).get("runs", 1))
+    stored = payload.get("metadata")
+    metadata: dict[str, object] = stored if isinstance(stored, dict) else {}
+    runs = int(metadata.get("runs", 1))
     for row in rows:
         # Older summaries stored microseconds.
         if "latency_ns" not in row:
             row["latency_ns"] = float(row.get("latency_us", 0.0)) * 1000.0
-    return cast(list[SummaryRow], rows), runs
+    return cast(list[SummaryRow], rows), runs, metadata
 
 
 HIGHCHARTS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/highcharts/8.2.0/"
 
 
-def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
+def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int, metadata: Mapping[str, object]) -> None:
     """Write an interactive Highcharts page (library from CDN, like yyjson).
 
     Layout: for each format, user task and metric (GB/s and ops/s) one column
@@ -977,6 +1019,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
         f"Median of {runs} process run(s) · "
         "timed path excludes file loading and cleanup."
     )
+    machine = "\n".join(f'  <p class="machine">{line}</p>' for line in machine_lines(metadata))
     html = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -990,6 +1033,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
   header {{ max-width: 1600px; margin: 0 auto 22px; text-align: center; }}
   header h1 {{ margin: 0 0 6px; font-size: 24px; color: #141a23; }}
   header p  {{ margin: 0; color: #4a5568; font-size: 14px; }}
+  header p.machine {{ margin: 6px 0 0; color: #718096; font-size: 12px; }}
   .section-header {{ max-width: 1600px; margin: 30px auto 18px; text-align: center; }}
   .section-header h2 {{ font-size: 20px; margin: 0 0 6px; color: #141a23; }}
   .section-header p {{ margin: 0; color: #4a5568; font-size: 14px; }}
@@ -1008,6 +1052,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
 <header>
   <h1>json-bench</h1>
   <p>{note}</p>
+{machine}
 </header>
 {body}
 <footer>Generated by bench.py; raw logs and measurements.json live alongside this page.</footer>
@@ -1055,7 +1100,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.no_build:
         measurements: list[Measurement] = []
         commands: dict[str, list[str]] = {}
-        metadata: dict[str, object] = {}
+        summary, runs, metadata = load_summary(output_dir / "measurements.json")
+        if not any(int(row.get("threads", 1)) > 1 for row in summary):
+            print(
+                "note: no thread series in measurements.json; run with --parallel to add one",
+                flush=True,
+            )
     else:
         parallel_limit = None if args.parallel is None else (args.parallel or machine_threads())
         measurements, commands = run_benchmarks(args.runs, parallel_limit, zig, optimize, output_dir)
@@ -1074,17 +1124,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for implementation, command in commands.items()
             },
         }
-
-    written: list[Path] = []
-    open_pages: list[Path] = []
-    if args.no_build:
-        summary, runs = load_summary(output_dir / "measurements.json")
-        if not any(int(row.get("threads", 1)) > 1 for row in summary):
-            print(
-                "note: no thread series in measurements.json; run with --parallel to add one",
-                flush=True,
-            )
-    else:
         runs = args.runs
         measured = [item for item in measurements if item.format == FORMAT]
         summary = aggregate(measured)
@@ -1099,12 +1138,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.dumps(payload, indent=2) + "\n", encoding="utf-8"
         )
 
+    written: list[Path] = []
+    open_pages: list[Path] = []
     csv_path = output_dir / "summary.csv"
     markdown_path = output_dir / "summary.md"
     page = output_dir / "index.html"
     write_csv(csv_path, summary)
-    write_markdown(markdown_path, summary, runs)
-    write_html_page(page, summary, runs)
+    write_markdown(markdown_path, summary, runs, metadata)
+    write_html_page(page, summary, runs, metadata)
     written.extend((csv_path, markdown_path, page))
     open_pages.append(page)
 
