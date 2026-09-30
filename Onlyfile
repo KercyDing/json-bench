@@ -3,6 +3,9 @@
 [help] Run the JSON benchmarks
 [pass] Benchmarks complete.
 [fail] Benchmarks failed.
+bench(args..) ? @has("uv"):
+    uv run bench.py {{args}}
+
 bench(args..):
     python3 bench.py {{args}}
 
