@@ -113,6 +113,11 @@ def load(summary: Path, threads: int) -> Row:
     return rows
 
 
+def plural(count: int, noun: str) -> str:
+    """``count`` followed by its noun, pluralized unless it is one."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
 def ranks(values: dict[str, float]) -> dict[str, int]:
     """Dense ranks, best first; equal metrics share a rank."""
     ordered = sorted(set(values.values()), reverse=True)
@@ -237,7 +242,7 @@ def write_chart(
         1, 2, figsize=(14, 6), gridspec_kw={"width_ratios": (3, 2)}
     )
     figure.suptitle(
-        f"JSON benchmark ranking over {len(platforms)} platforms\n"
+        f"JSON benchmark ranking over {plural(len(platforms), 'platform')}\n"
         "every metric normalized against the best implementation of the same task and dataset",
         fontsize=11,
     )
@@ -341,7 +346,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             per_platform[platform_name] = load(summary, args.threads)
             print(f"loaded {platform_name}: {summary}", flush=True)
 
-        measured = f"{args.threads} thread(s)"
+        measured = plural(args.threads, "thread")
         merged = pool([score(rows) for rows in per_platform.values()])
         keep = {
             name for name, entry in merged.items() if entry.median_relative >= args.min_relative
@@ -353,9 +358,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         for platform_name, rows in sorted(per_platform.items()):
             print()
-            print(rank_table(kept(score(rows), keep), f"{platform_name}, {measured} ({len(rows)} comparisons)"))
+            print(rank_table(kept(score(rows), keep), f"{platform_name}, {measured} ({plural(len(rows), 'comparison')})"))
 
-        print(rank_table(kept(merged, keep), f"merged, {measured} ({len(per_platform)} platforms)"))
+        print(rank_table(kept(merged, keep), f"merged, {measured} ({plural(len(per_platform), 'platform')})"))
         tasks = {
             task: {name: value for name, value in entries.items() if name in keep}
             for task, entries in task_scores(per_platform).items()
