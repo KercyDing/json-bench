@@ -30,13 +30,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 GET_TASK = "Get element"
-TASKS = (
-    "Encode known data",
-    "Decode known data",
-    "Load arbitrary data",
-    "Transform data",
-    GET_TASK,
-)
+TYPED_TASKS = ("Encode known data", "Decode known data")
+DOM_TASKS = ("Load arbitrary data", "Transform data", GET_TASK)
+TASKS = (*TYPED_TASKS, *DOM_TASKS)
 Row = dict[tuple[str, str, str], float]
 
 
@@ -172,8 +168,13 @@ def task_scores(per_platform: dict[str, Row]) -> dict[str, dict[str, float]]:
 
 
 def order_by(scores: dict[str, Score]) -> list[str]:
-    """Implementation names, best mean rank first."""
-    return [name for name, _ in sorted(scores.items(), key=lambda item: (item[1].mean_rank, -item[1].median_relative))]
+    """Implementation names, best relative placement first."""
+    return [
+        name
+        for name, _ in sorted(
+            scores.items(), key=lambda item: (-item[1].median_relative, item[1].mean_rank)
+        )
+    ]
 
 
 def rank_table(scores: dict[str, Score], title: str) -> str:
@@ -222,6 +223,7 @@ def write_chart(
     per_platform: dict[str, Row],
     merged: dict[str, Score],
     tasks: dict[str, dict[str, float]],
+    scope: str,
 ) -> None:
     """Draw the merged ranking per platform next to the per-task placement."""
     try:
@@ -243,7 +245,7 @@ def write_chart(
         1, 2, figsize=(14, 6), gridspec_kw={"width_ratios": (3, 2)}
     )
     figure.suptitle(
-        f"JSON benchmark ranking over {plural(len(platforms), 'platform')}\n"
+        f"JSON benchmark ranking over {plural(len(platforms), 'platform')} · {scope}\n"
         "every metric normalized against the best implementation of the same task and dataset",
         fontsize=11,
     )
@@ -324,6 +326,11 @@ def parser() -> argparse.ArgumentParser:
         help="hide implementations below this fraction of the best (default: 0.0, keep all)",
     )
     result.add_argument(
+        "--all-tasks",
+        action="store_true",
+        help="rank the typed Zig-only tasks together with the DOM tasks",
+    )
+    result.add_argument(
         "--png",
         type=Path,
         metavar="PATH",
@@ -348,7 +355,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"loaded {platform_name}: {summary}", flush=True)
 
         measured = plural(args.threads, "thread")
-        merged = pool([score(rows) for rows in per_platform.values()])
+        scope = "all tasks" if args.all_tasks else "DOM tasks"
+        ranked_tasks = TASKS if args.all_tasks else DOM_TASKS
+        ranked = {
+            name: {key: value for key, value in rows.items() if key[0] in ranked_tasks}
+            for name, rows in per_platform.items()
+        }
+
+        merged = pool([score(rows) for rows in ranked.values()])
         keep = {
             name for name, entry in merged.items() if entry.median_relative >= args.min_relative
         }
@@ -357,11 +371,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if len(keep) < len(merged):
             print(f"showing {len(keep)} of {len(merged)} implementations", flush=True)
 
-        for platform_name, rows in sorted(per_platform.items()):
+        for platform_name, rows in sorted(ranked.items()):
             print()
-            print(rank_table(kept(score(rows), keep), f"{platform_name}, {measured} ({plural(len(rows), 'comparison')})"))
+            print(rank_table(kept(score(rows), keep), f"{platform_name}, {measured}, {scope} ({plural(len(rows), 'comparison')})"))
 
-        print(rank_table(kept(merged, keep), f"merged, {measured} ({plural(len(per_platform), 'platform')})"))
+        print(rank_table(kept(merged, keep), f"merged, {measured}, {scope} ({plural(len(ranked), 'platform')})"))
         tasks = {
             task: {name: value for name, value in entries.items() if name in keep}
             for task, entries in task_scores(per_platform).items()
@@ -370,7 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.png is not None:
             try:
-                write_chart(args.png, per_platform, kept(merged, keep), tasks)
+                write_chart(args.png, ranked, kept(merged, keep), tasks, scope)
             except OSError as error:
                 # A viewer holding the file open is not a benchmark failure.
                 print(f"not overwrote {args.png}: {error.strerror}", file=sys.stderr, flush=True)
