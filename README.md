@@ -80,7 +80,8 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 
 | Path | Contents |
 | --- | --- |
-| `bench.py` | Build, run, and report driver. |
+| `bench.py` | Build, run, and report driver. Records the CPU and tool versions of the machine in `measurements.json`. |
+| `rank.py` | Ranks published results per platform and merged (`python rank.py ~/Downloads`). |
 | `CMakePresets.json` | The `release` preset (`Unix Makefiles`, `Release`, `build/`) shared by `bench.py` and editors; keeps cached generator/build type from drifting. `release-windows` is the same preset with `Ninja`. |
 | `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
 | `c/` | yyjson benchmark. |
