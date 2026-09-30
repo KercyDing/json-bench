@@ -986,22 +986,22 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int) -> None:
 <script src="{HIGHCHARTS_CDN}modules/exporting.js"></script>
 <script src="{HIGHCHARTS_CDN}modules/offline-exporting.js"></script>
 <style>
-  body {{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px 32px 48px; background: #f3f6f9; color: #1f2733; }}
-  header {{ max-width: 1000px; margin: 0 auto 22px; text-align: center; }}
+  body {{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px 20px 48px; background: #f3f6f9; color: #1f2733; }}
+  header {{ max-width: 1600px; margin: 0 auto 22px; text-align: center; }}
   header h1 {{ margin: 0 0 6px; font-size: 24px; color: #141a23; }}
   header p  {{ margin: 0; color: #4a5568; font-size: 14px; }}
-  .section-header {{ max-width: 1000px; margin: 30px auto 18px; text-align: center; }}
+  .section-header {{ max-width: 1600px; margin: 30px auto 18px; text-align: center; }}
   .section-header h2 {{ font-size: 20px; margin: 0 0 6px; color: #141a23; }}
   .section-header p {{ margin: 0; color: #4a5568; font-size: 14px; }}
   h2 {{ font-size: 16px; margin: 0 0 12px; color: #141a23; }}
   .chart-note {{ margin: -4px 0 12px; color: #4a5568; font-size: 14px; }}
-  section.plot {{ max-width: 1000px; margin: 0 auto 28px; background: #ffffff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); }}
-  .plot-row {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; max-width: 1320px; margin: 0 auto 28px; align-items: start; }}
+  section.plot {{ max-width: 1600px; margin: 0 auto 28px; background: #ffffff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); }}
+  .plot-row {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 1600px; margin: 0 auto 28px; align-items: start; }}
   .plot-row section.plot {{ max-width: none; margin: 0; }}
   @media (min-width: 901px) {{ .plot-row.single section.plot {{ grid-column: 2; }} }}
   @media (max-width: 900px) {{ .plot-row {{ grid-template-columns: minmax(0, 1fr); }} }}
   .hc-container {{ width: 100%; }}
-  footer {{ max-width: 1000px; margin: 4px auto 0; color: #718096; font-size: 12px; text-align: center; }}
+  footer {{ max-width: 1600px; margin: 4px auto 0; color: #718096; font-size: 12px; text-align: center; }}
 </style>
 </head>
 <body>
