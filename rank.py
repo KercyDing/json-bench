@@ -3,7 +3,7 @@
 Reads the release archives (``json-bench-<os>-<arch>.zip``), or the directories
 they extract to, and prints one ranking per platform plus a merged one. Give it
 a directory (or archives) on the command line; the working directory is used by
-default.
+default. ``--png PATH`` also writes the ranking as a chart.
 
 Platforms differ by several times in absolute speed, so every metric is
 normalized against the best implementation for the same task and dataset on the
@@ -13,7 +13,7 @@ task but ``get``, which is ranked by operations per second.
 
 Typical use::
 
-    python rank.py ~/Downloads
+    python rank.py ~/Downloads --png ranking.png > ranking.md
 """
 
 import argparse
@@ -69,7 +69,9 @@ def summaries(paths: Sequence[Path], scratch: Path) -> list[tuple[str, Path]]:
             found.extend(summaries([target], scratch))
         elif path.is_dir():
             found.extend((platform_of(item), item) for item in sorted(path.rglob("summary.csv")))
-            found.extend(summaries(sorted(path.glob("*.zip")), scratch))
+            # An archive beside its own extracted directory would be counted twice.
+            archives = [zip for zip in sorted(path.glob("*.zip")) if not (path / zip.stem).is_dir()]
+            found.extend(summaries(archives, scratch))
         elif path.exists():
             found.append((platform_of(path), path))
     return found
@@ -126,25 +128,7 @@ def pool(scored: Sequence[dict[str, Score]]) -> dict[str, Score]:
     return pooled
 
 
-def rank_table(scores: dict[str, Score], title: str) -> str:
-    """A markdown table of one ranking."""
-    order = sorted(scores.items(), key=lambda item: (item[1].mean_rank, -item[1].median_relative))
-    lines = [
-        f"## {title}",
-        "",
-        "| # | implementation | median vs best | mean rank | wins | comparisons |",
-        "| ---: | --- | ---: | ---: | ---: | ---: |",
-    ]
-    for position, (implementation, entry) in enumerate(order, start=1):
-        lines.append(
-            f"| {position} | {implementation} | {entry.median_relative:.2f} | "
-            f"{entry.mean_rank:.2f} | {entry.wins} | {len(entry.relative)} |"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def task_table(per_platform: dict[str, Row]) -> str:
+def task_scores(per_platform: dict[str, Row]) -> dict[str, dict[str, float]]:
     """Mean placement per task, with every platform weighing the same."""
     per_task: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for rows in per_platform.values():
@@ -154,12 +138,40 @@ def task_table(per_platform: dict[str, Row]) -> str:
                 continue
             for implementation, entry in score(subset).items():
                 per_task[task][implementation].append(entry.median_relative)
+    return {
+        task: {implementation: statistics.fmean(values) for implementation, values in entries.items()}
+        for task, entries in per_task.items()
+    }
 
+
+def order_by(scores: dict[str, Score]) -> list[str]:
+    """Implementation names, best mean rank first."""
+    return [name for name, _ in sorted(scores.items(), key=lambda item: (item[1].mean_rank, -item[1].median_relative))]
+
+
+def rank_table(scores: dict[str, Score], title: str) -> str:
+    """A markdown table of one ranking."""
+    lines = [
+        f"## {title}",
+        "",
+        "| # | implementation | median vs best | mean rank | wins | comparisons |",
+        "| ---: | --- | ---: | ---: | ---: | ---: |",
+    ]
+    for position, implementation in enumerate(order_by(scores), start=1):
+        entry = scores[implementation]
+        lines.append(
+            f"| {position} | {implementation} | {entry.median_relative:.2f} | "
+            f"{entry.mean_rank:.2f} | {entry.wins} | {len(entry.relative)} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def task_table(tasks: dict[str, dict[str, float]]) -> str:
+    """A markdown table of the merged placement per task."""
     def overall(implementation: str) -> float:
         return statistics.fmean(
-            statistics.fmean(per_task[task][implementation])
-            for task in TASKS
-            if per_task[task].get(implementation)
+            tasks[task][implementation] for task in TASKS if tasks[task].get(implementation)
         )
 
     lines = [
@@ -168,16 +180,95 @@ def task_table(per_platform: dict[str, Row]) -> str:
         "| implementation | " + " | ".join(TASKS) + " |",
         "| --- | " + " | ".join("---:" for _ in TASKS) + " |",
     ]
-    for implementation in sorted(per_task[GET_TASK], key=overall, reverse=True):
+    for implementation in sorted(tasks[GET_TASK], key=overall, reverse=True):
         cells = [
-            f"{statistics.fmean(per_task[task][implementation]):.2f}"
-            if per_task[task].get(implementation)
-            else "-"
+            f"{tasks[task][implementation]:.2f}" if tasks[task].get(implementation) else "-"
             for task in TASKS
         ]
         lines.append(f"| {implementation} | " + " | ".join(cells) + " |")
     lines.append("")
     return "\n".join(lines)
+
+
+def write_chart(
+    path: Path,
+    per_platform: dict[str, Row],
+    merged: dict[str, Score],
+    tasks: dict[str, dict[str, float]],
+) -> None:
+    """Draw the merged ranking per platform next to the per-task placement."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        raise SystemExit(f"matplotlib is needed for {path}: pip install matplotlib") from None
+
+    platforms = sorted(per_platform)
+    platform_scores = {name: score(rows) for name, rows in per_platform.items()}
+    order = order_by(merged)
+    task_order = sorted(tasks[GET_TASK], key=lambda name: -statistics.fmean(
+        tasks[task][name] for task in TASKS if tasks[task].get(name)
+    ))
+
+    figure, (left, right) = plt.subplots(
+        1, 2, figsize=(14, 6), gridspec_kw={"width_ratios": (3, 2)}
+    )
+    figure.suptitle(
+        f"JSON benchmark ranking over {len(platforms)} platforms\n"
+        "every metric normalized against the best implementation of the same task and dataset",
+        fontsize=11,
+    )
+
+    width = 0.8 / len(platforms)
+    for index, platform_name in enumerate(platforms):
+        values = [platform_scores[platform_name][name].median_relative for name in order]
+        left.bar(
+            [position + index * width for position in range(len(order))],
+            values,
+            width,
+            label=platform_name,
+        )
+    left.set_title("merged ranking", fontsize=10)
+    left.set_ylabel("median vs best")
+    left.set_ylim(0, 1.05)
+    left.set_xticks(range(len(order)), order, rotation=30, ha="right")
+    left.grid(axis="y", alpha=0.3)
+
+    matrix = [[tasks[task].get(name) for task in TASKS] for name in task_order]
+    image = right.imshow(
+        [[float("nan") if value is None else value for value in row] for row in matrix],
+        cmap="viridis",
+        vmin=0,
+        vmax=1,
+        aspect="auto",
+    )
+    right.set_title("merged by task", fontsize=10)
+    right.set_xticks(range(len(TASKS)), [task.replace(" ", "\n") for task in TASKS], fontsize=8)
+    right.set_yticks(range(len(task_order)), task_order, fontsize=9)
+    for row, name in enumerate(task_order):
+        for column, task in enumerate(TASKS):
+            value = tasks[task].get(name)
+            if value is None:
+                continue
+            right.text(
+                column,
+                row,
+                f"{value:.2f}",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="white" if value < 0.55 else "black",
+            )
+    figure.colorbar(image, ax=right, shrink=0.85, label="mean vs best")
+
+    handles, labels = left.get_legend_handles_labels()
+    figure.legend(handles, labels, loc="lower center", ncols=len(platforms), fontsize=9, frameon=False)
+
+    figure.tight_layout(rect=(0, 0.05, 1, 1))
+    figure.savefig(str(path), dpi=160)
+    plt.close(figure)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -190,6 +281,12 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         default=[Path.cwd()],
         help="release archives, or directories holding them (default: the working directory)",
+    )
+    result.add_argument(
+        "--png",
+        type=Path,
+        metavar="PATH",
+        help="also write the ranking as a chart",
     )
     return result
 
@@ -211,9 +308,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print()
             print(rank_table(score(rows), f"{platform_name} ({len(rows)} measurements)"))
 
-        print(rank_table(pool([score(rows) for rows in per_platform.values()]),
-                         f"merged ({len(per_platform)} platforms)"))
-        print(task_table(per_platform), end="")
+        merged = pool([score(rows) for rows in per_platform.values()])
+        print(rank_table(merged, f"merged ({len(per_platform)} platforms)"))
+        tasks = task_scores(per_platform)
+        print(task_table(tasks), end="")
+
+        if args.png is not None:
+            write_chart(args.png, per_platform, merged, tasks)
+            print(f"wrote {args.png}", flush=True)
     return 0
 
 
