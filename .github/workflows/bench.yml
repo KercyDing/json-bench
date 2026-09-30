@@ -51,7 +51,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: json-bench-${{ matrix.os }}-${{ matrix.arch }}
-          path: results/json/
+          path: results/
 
   release:
     needs: bench

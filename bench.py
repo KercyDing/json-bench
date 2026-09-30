@@ -13,7 +13,7 @@ The Zig programs already perform warmup and repeat each fixture according to
 its size and print one task-tagged metric line per dataset. This driver runs
 every implementation in separate processes, keeps the raw text for
 auditability, aggregates process runs by median, and renders one web page
-(``results/json/index.html``) with Highcharts column charts — for each task two
+(``results/index.html``) with Highcharts column charts — for each task two
 side-by-side charts: throughput in GB/s and rate in ops/s. With
 ``--parallel`` it also starts 1, 2, 4, ... processes at once and adds line
 charts per task: aggregate throughput and speedup against the thread count.
@@ -26,8 +26,8 @@ Typical use::
     uv run bench.py               # run all, write html + csv + md, open page
     uv run bench.py --no-build    # regenerate reports from existing results
 
-Raw per-process output and ``measurements.json`` are kept under the result
-format directory; the HTML, CSV, and Markdown reports are derived from them.
+Raw per-process output and ``measurements.json`` are kept in ``results/``; the
+HTML, CSV, and Markdown reports are derived from them.
 """
 
 import argparse
@@ -459,7 +459,7 @@ def run_benchmarks(
             offset = (run - 1) % len(IMPLEMENTATIONS)
             order = IMPLEMENTATIONS[offset:] + IMPLEMENTATIONS[:offset]
             for implementation in order:
-                raw_dir = output_dir / FORMAT / implementation_directory(implementation)
+                raw_dir = output_dir / implementation_directory(implementation)
                 command = commands[implementation]
                 label = f"{FORMAT}/{implementation}"
                 stem = "tasks" if counts == (1,) else f"tasks-t{threads:02d}"
@@ -1077,41 +1077,36 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     written: list[Path] = []
     open_pages: list[Path] = []
-    for format_name in (FORMAT,):
-        format_dir = output_dir / format_name
-        format_dir.mkdir(parents=True, exist_ok=True)
-        if args.no_build:
-            format_summary, runs = load_summary(format_dir / "measurements.json")
-            if not any(int(row.get("threads", 1)) > 1 for row in format_summary):
-                print(
-                    f"note: {format_name} has no thread series in measurements.json; "
-                    "run with --parallel to add one",
-                    flush=True,
-                )
-        else:
-            runs = args.runs
-            format_measurements = [item for item in measurements if item.format == format_name]
-            format_summary = aggregate(format_measurements)
-            payload = {
-                "metadata": metadata | {"format": format_name},
-                "measurements": [
-                    asdict(item) | {"measured_bytes": item.measured_bytes}
-                    for item in format_measurements
-                ],
-                "summary": format_summary,
-            }
-            (format_dir / "measurements.json").write_text(
-                json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    if args.no_build:
+        summary, runs = load_summary(output_dir / "measurements.json")
+        if not any(int(row.get("threads", 1)) > 1 for row in summary):
+            print(
+                "note: no thread series in measurements.json; run with --parallel to add one",
+                flush=True,
             )
+    else:
+        runs = args.runs
+        measured = [item for item in measurements if item.format == FORMAT]
+        summary = aggregate(measured)
+        payload = {
+            "metadata": metadata | {"format": FORMAT},
+            "measurements": [
+                asdict(item) | {"measured_bytes": item.measured_bytes} for item in measured
+            ],
+            "summary": summary,
+        }
+        (output_dir / "measurements.json").write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
 
-        csv_path = format_dir / "summary.csv"
-        markdown_path = format_dir / "summary.md"
-        page = format_dir / "index.html"
-        write_csv(csv_path, format_summary)
-        write_markdown(markdown_path, format_summary, runs)
-        write_html_page(page, format_summary, runs)
-        written.extend((csv_path, markdown_path, page))
-        open_pages.append(page)
+    csv_path = output_dir / "summary.csv"
+    markdown_path = output_dir / "summary.md"
+    page = output_dir / "index.html"
+    write_csv(csv_path, summary)
+    write_markdown(markdown_path, summary, runs)
+    write_html_page(page, summary, runs)
+    written.extend((csv_path, markdown_path, page))
+    open_pages.append(page)
 
     for path in written:
         print(f"wrote {path}")

@@ -65,7 +65,7 @@ python3 bench.py
 ```
 
 `bench.py` builds every language, runs each implementation, aggregates the runs
-by median, writes `results/json/{summary.csv,summary.md,index.html}`, and opens
+by median, writes `results/{summary.csv,summary.md,index.html}`, and opens
 the report.
 
 On Windows the C/C++ build uses `release-windows`, the same preset with the
@@ -77,7 +77,7 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 | --- | --- |
 | `--runs N` | Independent process runs per implementation (default: 3). |
 | `--parallel [THREADS]` | Also measure 1, 2, 4, ... processes at once, up to `THREADS`, and chart the scaling. |
-| `--no-build` | Regenerate the reports from `results/json/measurements.json`. |
+| `--no-build` | Regenerate the reports from `results/measurements.json`. |
 
 ## Layout
 
