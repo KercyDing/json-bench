@@ -151,11 +151,11 @@ def kept(scores: dict[str, Score], keep: set[str]) -> dict[str, Score]:
     return {name: entry for name, entry in scores.items() if name in keep}
 
 
-def task_scores(per_platform: dict[str, Row]) -> dict[str, dict[str, float]]:
+def task_scores(per_platform: dict[str, Row], columns: Sequence[str]) -> dict[str, dict[str, float]]:
     """Mean placement per task, with every platform weighing the same."""
     per_task: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for rows in per_platform.values():
-        for task in TASKS:
+        for task in columns:
             subset = {key: value for key, value in rows.items() if key[0] == task}
             if not subset:
                 continue
@@ -195,27 +195,32 @@ def rank_table(scores: dict[str, Score], title: str) -> str:
     return "\n".join(lines)
 
 
-def task_table(tasks: dict[str, dict[str, float]]) -> str:
+def task_table(tasks: dict[str, dict[str, float]], columns: Sequence[str]) -> str:
     """A markdown table of the merged placement per task."""
     def overall(implementation: str) -> float:
         return statistics.fmean(
-            tasks[task][implementation] for task in TASKS if tasks[task].get(implementation)
+            tasks[task][implementation] for task in columns if tasks[task].get(implementation)
         )
 
     lines = [
         "## merged by task",
         "",
-        "| implementation | " + " | ".join(TASKS) + " |",
-        "| --- | " + " | ".join("---:" for _ in TASKS) + " |",
+        "| implementation | " + " | ".join(columns) + " |",
+        "| --- | " + " | ".join("---:" for _ in columns) + " |",
     ]
     for implementation in sorted(tasks[GET_TASK], key=overall, reverse=True):
         cells = [
             f"{tasks[task][implementation]:.2f}" if tasks[task].get(implementation) else "-"
-            for task in TASKS
+            for task in columns
         ]
         lines.append(f"| {implementation} | " + " | ".join(cells) + " |")
     lines.append("")
     return "\n".join(lines)
+
+
+def scope_name(columns: Sequence[str]) -> str:
+    """How to name a task selection in titles."""
+    return "all tasks" if tuple(columns) == TASKS else "DOM tasks"
 
 
 def write_chart(
@@ -223,7 +228,7 @@ def write_chart(
     per_platform: dict[str, Row],
     merged: dict[str, Score],
     tasks: dict[str, dict[str, float]],
-    scope: str,
+    columns: Sequence[str],
 ) -> None:
     """Draw the merged ranking per platform next to the per-task placement."""
     try:
@@ -237,15 +242,12 @@ def write_chart(
     platforms = sorted(per_platform)
     platform_scores = {name: score(rows) for name, rows in per_platform.items()}
     order = order_by(merged)
-    task_order = sorted(tasks[GET_TASK], key=lambda name: -statistics.fmean(
-        tasks[task][name] for task in TASKS if tasks[task].get(name)
-    ))
 
     figure, (left, right) = plt.subplots(
         1, 2, figsize=(14, 6), gridspec_kw={"width_ratios": (3, 2)}
     )
     figure.suptitle(
-        f"JSON benchmark ranking over {plural(len(platforms), 'platform')} · {scope}\n"
+        f"JSON benchmark ranking over {plural(len(platforms), 'platform')} · {scope_name(columns)}\n"
         "every metric normalized against the best implementation of the same task and dataset",
         fontsize=11,
     )
@@ -265,7 +267,7 @@ def write_chart(
     left.set_xticks(range(len(order)), order, rotation=30, ha="right")
     left.grid(axis="y", alpha=0.3)
 
-    matrix = [[tasks[task].get(name) for task in TASKS] for name in task_order]
+    matrix = [[tasks[task].get(name) for task in columns] for name in order]
     image = right.imshow(
         [[float("nan") if value is None else value for value in row] for row in matrix],
         cmap="viridis",
@@ -274,10 +276,10 @@ def write_chart(
         aspect="auto",
     )
     right.set_title("merged by task", fontsize=10)
-    right.set_xticks(range(len(TASKS)), [task.replace(" ", "\n") for task in TASKS], fontsize=8)
-    right.set_yticks(range(len(task_order)), task_order, fontsize=9)
-    for row, name in enumerate(task_order):
-        for column, task in enumerate(TASKS):
+    right.set_xticks(range(len(columns)), [task.replace(" ", "\n") for task in columns], fontsize=8)
+    right.set_yticks(range(len(order)), order, fontsize=9)
+    for row, name in enumerate(order):
+        for column, task in enumerate(columns):
             value = tasks[task].get(name)
             if value is None:
                 continue
@@ -355,10 +357,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"loaded {platform_name}: {summary}", flush=True)
 
         measured = plural(args.threads, "thread")
-        scope = "all tasks" if args.all_tasks else "DOM tasks"
-        ranked_tasks = TASKS if args.all_tasks else DOM_TASKS
+        columns = TASKS if args.all_tasks else DOM_TASKS
+        scope = scope_name(columns)
         ranked = {
-            name: {key: value for key, value in rows.items() if key[0] in ranked_tasks}
+            name: {key: value for key, value in rows.items() if key[0] in columns}
             for name, rows in per_platform.items()
         }
 
@@ -378,13 +380,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(rank_table(kept(merged, keep), f"merged, {measured}, {scope} ({plural(len(ranked), 'platform')})"))
         tasks = {
             task: {name: value for name, value in entries.items() if name in keep}
-            for task, entries in task_scores(per_platform).items()
+            for task, entries in task_scores(per_platform, columns).items()
         }
-        print(task_table(tasks), end="")
+        print(task_table(tasks, columns), end="")
 
         if args.png is not None:
             try:
-                write_chart(args.png, ranked, kept(merged, keep), tasks, scope)
+                write_chart(args.png, ranked, kept(merged, keep), tasks, columns)
             except OSError as error:
                 # A viewer holding the file open is not a benchmark failure.
                 print(f"not overwrote {args.png}: {error.strerror}", file=sys.stderr, flush=True)
