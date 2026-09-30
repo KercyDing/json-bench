@@ -3,7 +3,8 @@
 Reads the release archives (``json-bench-<os>-<arch>.zip``), or the directories
 they extract to, and prints one ranking per platform plus a merged one. Give it
 a directory (or archives) on the command line; the working directory is used by
-default. ``--png PATH`` also writes the ranking as a chart.
+default. ``--threads N`` picks which process count to rank (1 by default) and
+``--png PATH`` also writes the ranking as a chart.
 
 Platforms differ by several times in absolute speed, so every metric is
 normalized against the best implementation for the same task and dataset on the
@@ -18,6 +19,7 @@ Typical use::
 
 import argparse
 import csv
+import json
 import statistics
 import tempfile
 import zipfile
@@ -78,22 +80,35 @@ def summaries(paths: Sequence[Path], scratch: Path) -> list[tuple[str, Path]]:
 
 
 def platform_of(summary: Path) -> str:
-    """The platform label, taken from the enclosing release directory name."""
+    """The release directory name, or the recorded CPU for a plain result directory."""
     for parent in summary.parents:
         if parent.name.startswith("json-bench-"):
             return parent.name.removeprefix("json-bench-")
+    measurements = summary.with_name("measurements.json")
+    if measurements.exists():
+        try:
+            cpu = json.loads(measurements.read_text(encoding="utf-8"))["metadata"]["cpu"]
+        except (OSError, ValueError, KeyError, TypeError):
+            cpu = None
+        if cpu:
+            return str(cpu)
     return summary.parent.name
 
 
-def load(summary: Path) -> Row:
-    """``(task, dataset, implementation) -> ``ops/s for ``get``, GB/s otherwise."""
+def load(summary: Path, threads: int) -> Row:
+    """``(task, dataset, implementation) -> ``ops/s for ``get``, GB/s otherwise.
+
+    A summary holds one row per process count, so only ``threads`` is kept.
+    """
     rows: Row = {}
     with summary.open(encoding="utf-8", newline="") as handle:
         for entry in csv.DictReader(handle):
-            if entry["task"] not in TASKS:
+            if entry["task"] not in TASKS or int(entry["threads"]) != threads:
                 continue
             column = "ops_per_s" if entry["task"] == GET_TASK else "throughput_gb_s"
             rows[(entry["task"], entry["dataset"], entry["implementation"])] = float(entry[column])
+    if not rows:
+        raise SystemExit(f"{summary}: no measurements at {threads} thread(s)")
     return rows
 
 
@@ -283,6 +298,13 @@ def parser() -> argparse.ArgumentParser:
         help="release archives, or directories holding them (default: the working directory)",
     )
     result.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        metavar="N",
+        help="process count to rank, as measured by bench.py --parallel (default: 1)",
+    )
+    result.add_argument(
         "--png",
         type=Path,
         metavar="PATH",
@@ -293,6 +315,8 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.threads < 1:
+        raise SystemExit("--threads must be at least 1")
     with tempfile.TemporaryDirectory() as scratch_name:
         found = summaries(args.paths, Path(scratch_name))
         if not found:
@@ -301,15 +325,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         per_platform: dict[str, Row] = {}
         for platform_name, summary in found:
-            per_platform[platform_name] = load(summary)
+            per_platform[platform_name] = load(summary, args.threads)
             print(f"loaded {platform_name}: {summary}", flush=True)
 
+        measured = f"{args.threads} thread(s)"
         for platform_name, rows in sorted(per_platform.items()):
             print()
-            print(rank_table(score(rows), f"{platform_name} ({len(rows)} measurements)"))
+            print(rank_table(score(rows), f"{platform_name}, {measured} ({len(rows)} comparisons)"))
 
         merged = pool([score(rows) for rows in per_platform.values()])
-        print(rank_table(merged, f"merged ({len(per_platform)} platforms)"))
+        print(rank_table(merged, f"merged, {measured} ({len(per_platform)} platforms)"))
         tasks = task_scores(per_platform)
         print(task_table(tasks), end="")
 
