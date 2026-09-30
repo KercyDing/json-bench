@@ -3,7 +3,8 @@
 Reads the release archives (``json-bench-<os>-<arch>.zip``), or the directories
 they extract to, and prints one ranking per platform plus a merged one. Give it
 a directory (or archives) on the command line; the working directory is used by
-default. ``--threads N`` picks which process count to rank (1 by default) and
+default. ``--threads N`` picks which process count to rank (1 by default),
+``--min-relative F`` hides implementations below that fraction of the best, and
 ``--png PATH`` also writes the ranking as a chart.
 
 Platforms differ by several times in absolute speed, so every metric is
@@ -141,6 +142,11 @@ def pool(scored: Sequence[dict[str, Score]]) -> dict[str, Score]:
             pooled[implementation].rank.extend(entry.rank)
             pooled[implementation].wins += entry.wins
     return pooled
+
+
+def kept(scores: dict[str, Score], keep: set[str]) -> dict[str, Score]:
+    """The scores of the implementations worth showing."""
+    return {name: entry for name, entry in scores.items() if name in keep}
 
 
 def task_scores(per_platform: dict[str, Row]) -> dict[str, dict[str, float]]:
@@ -305,6 +311,13 @@ def parser() -> argparse.ArgumentParser:
         help="process count to rank, as measured by bench.py --parallel (default: 1)",
     )
     result.add_argument(
+        "--min-relative",
+        type=float,
+        default=0.0,
+        metavar="F",
+        help="hide implementations below this fraction of the best (default: 0.0, keep all)",
+    )
+    result.add_argument(
         "--png",
         type=Path,
         metavar="PATH",
@@ -329,17 +342,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"loaded {platform_name}: {summary}", flush=True)
 
         measured = f"{args.threads} thread(s)"
+        merged = pool([score(rows) for rows in per_platform.values()])
+        keep = {
+            name for name, entry in merged.items() if entry.median_relative >= args.min_relative
+        }
+        if not keep:
+            raise SystemExit(f"nothing reaches {args.min_relative:.2f} of the best")
+        if len(keep) < len(merged):
+            print(f"showing {len(keep)} of {len(merged)} implementations", flush=True)
+
         for platform_name, rows in sorted(per_platform.items()):
             print()
-            print(rank_table(score(rows), f"{platform_name}, {measured} ({len(rows)} comparisons)"))
+            print(rank_table(kept(score(rows), keep), f"{platform_name}, {measured} ({len(rows)} comparisons)"))
 
-        merged = pool([score(rows) for rows in per_platform.values()])
-        print(rank_table(merged, f"merged, {measured} ({len(per_platform)} platforms)"))
-        tasks = task_scores(per_platform)
+        print(rank_table(kept(merged, keep), f"merged, {measured} ({len(per_platform)} platforms)"))
+        tasks = {
+            task: {name: value for name, value in entries.items() if name in keep}
+            for task, entries in task_scores(per_platform).items()
+        }
         print(task_table(tasks), end="")
 
         if args.png is not None:
-            write_chart(args.png, per_platform, merged, tasks)
+            write_chart(args.png, per_platform, kept(merged, keep), tasks)
             print(f"wrote {args.png}", flush=True)
     return 0
 
