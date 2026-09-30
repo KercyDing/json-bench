@@ -22,6 +22,7 @@ import argparse
 import csv
 import json
 import statistics
+import sys
 import tempfile
 import zipfile
 from collections import defaultdict
@@ -368,8 +369,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(task_table(tasks), end="")
 
         if args.png is not None:
-            write_chart(args.png, per_platform, kept(merged, keep), tasks)
-            print(f"wrote {args.png}", flush=True)
+            try:
+                write_chart(args.png, per_platform, kept(merged, keep), tasks)
+            except OSError as error:
+                # A viewer holding the file open is not a benchmark failure.
+                print(f"not overwrote {args.png}: {error.strerror}", file=sys.stderr, flush=True)
+            else:
+                print(f"wrote {args.png}", flush=True)
     return 0
 
 

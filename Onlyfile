@@ -5,7 +5,7 @@
 [fail] Benchmarks failed.
 bench(args..) ? @has("uv"):
     uv run bench.py {{args}}
-    uv run rank.py results
+    uv run --with matplotlib rank.py results --png results/ranking.png
 
 bench(args..):
     python3 bench.py {{args}}
