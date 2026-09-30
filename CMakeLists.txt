@@ -35,4 +35,8 @@ target_include_directories(glaze_bench PRIVATE cpp ${glaze_SOURCE_DIR}/include)
 
 foreach(target yyjson_bench simdjson_bench glaze_bench)
     target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:-O3;-march=native>)
+    if(MINGW)
+        # Standalone binaries: PATH may hold an incompatible MinGW runtime.
+        target_link_options(${target} PRIVATE -static)
+    endif()
 endforeach()
