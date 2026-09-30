@@ -5,9 +5,11 @@
 [fail] Benchmarks failed.
 bench(args..) ? @has("uv"):
     uv run bench.py {{args}}
+    uv run rank.py results
 
 bench(args..):
     python3 bench.py {{args}}
+    python3 rank.py results
 
 [help] Clean build output and caches
 [pass] Clean complete.
