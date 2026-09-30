@@ -56,9 +56,16 @@ jobs:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+      - name: Rank
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet matplotlib
+          .venv/bin/python rank.py --png ranking.png artifacts > ranking.md
+          cat ranking.md
       - name: Zip results
         run: |
           cd artifacts
@@ -71,4 +78,4 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             tag="$tag-${GITHUB_RUN_NUMBER}"
           fi
-          gh release create "$tag" --title "$tag" artifacts/*.zip
+          gh release create "$tag" --title "$tag" artifacts/*.zip ranking.png ranking.md
