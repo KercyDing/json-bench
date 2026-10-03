@@ -1,7 +1,7 @@
 # json-bench
 
 <p>
-  <img src="https://github.com/KercyDing/json-bench/releases/download/20260930-ace9943/ranking.png" width="70%" />
+  <img src="https://github.com/KercyDing/json-bench/releases/download/20261003-3d1f838/ranking.png" width="70%" />
 </p>
 
 Benchmarks for JSON libraries across Zig, C, C++, and Rust, on real-world data.
