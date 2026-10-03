@@ -11,6 +11,21 @@ bench(args..):
     python3 bench.py {{args}}
     python3 rank.py results
 
+[help] Zig 0.16.0 tasks
+group zig16 {
+
+    [help] Run the JSON benchmarks with Zig 0.16.0
+    [pass] Benchmarks complete.
+    [fail] Benchmarks failed.
+    bench(args..) ? @has("uv"):
+        mise -E zig16 exec -- uv run bench.py {{args}}
+        mise -E zig16 exec -- uv run --with matplotlib rank.py results --png results/ranking.png
+
+    bench(args..):
+        mise -E zig16 exec -- python3 bench.py {{args}}
+        mise -E zig16 exec -- python3 rank.py results
+}
+
 [help] Clean build output and caches
 [pass] Clean complete.
 clean():
