@@ -222,12 +222,14 @@ def run_concurrently(
     return outputs
 
 
-def run_warmup(command: Sequence[str]) -> None:
+def run_warmup(command: Sequence[str], env: Mapping[str, str] | None = None) -> None:
     """Run one implementation once to populate build/runtime caches."""
-    print(f"$ {' '.join(command)}", flush=True)
+    assignments = " ".join(f"{key}={value}" for key, value in (env or {}).items())
+    print(f"$ {assignments + ' ' if assignments else ''}{' '.join(command)}", flush=True)
     completed = subprocess.run(
         list(command),
         cwd=ROOT,
+        env=os.environ | (env or {}),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
@@ -292,6 +294,11 @@ RUN_COMMANDS = {
 }
 # CMakePresets.json hides the release preset that does not match this host.
 CMAKE_PRESET = "release-windows" if os.name == "nt" else "release"
+
+# Zig gets -Dcpu=native and the C/C++ preset uses -march=native, so Rust has to
+# target the host CPU too; sonic-rs picks its AVX2 kernels from a compile-time
+# target_feature check and otherwise stays on the scalar fallback.
+RUSTFLAGS = f"{os.environ.get('RUSTFLAGS', '')} -C target-cpu=native".strip()
 
 
 def implementation_directory(implementation: str) -> str:
@@ -432,7 +439,7 @@ def build_all(zig: str, optimize: str) -> None:
     # session and this script always share one configuration.
     run_warmup(["cmake", "--preset", CMAKE_PRESET])
     run_warmup(["cmake", "--build", "--preset", CMAKE_PRESET])
-    run_warmup(["cargo", "build", "--release", "--bins"])
+    run_warmup(["cargo", "build", "--release", "--bins"], env={"RUSTFLAGS": RUSTFLAGS})
 
 
 def expected_measurements(implementation: str) -> set[tuple[str, str]]:
@@ -1116,6 +1123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "platform": platform.platform(),
             "cpu": cpu_model(),
             "toolchain": toolchain(zig),
+            "rustflags": RUSTFLAGS,
             "runs": args.runs,
             "parallel": parallel_limit,
             "threads": list(thread_counts(parallel_limit)) if parallel_limit else [1],
