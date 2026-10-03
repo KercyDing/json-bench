@@ -143,7 +143,7 @@ fn get(comptime Adapter: type, comptime T: type, input: []const u8, repeats: usi
     var value = try Adapter.decode(T, arena.allocator(), input);
     defer deinitValue(Adapter, &value);
 
-    Adapter.get(value, pointer);
+    Adapter.get(&value, pointer);
 
     // The access is tens of nanoseconds, so time a batch instead of paying the
     // clock overhead on every access.
@@ -151,7 +151,7 @@ fn get(comptime Adapter: type, comptime T: type, input: []const u8, repeats: usi
     var elapsed: u64 = 0;
     for (0..repeats) |_| {
         const start = shared.nowNanoseconds();
-        for (0..batch) |_| Adapter.get(value, pointer);
+        for (0..batch) |_| Adapter.get(&value, pointer);
         elapsed += @max(shared.nowNanoseconds() - start, 1);
     }
     report(Adapter.name ++ " get", input.len, repeats * batch, elapsed, null);

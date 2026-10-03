@@ -17,8 +17,8 @@ const Adapter = struct {
         return output.toOwnedSlice();
     }
 
-    pub fn get(value: std.json.Value, comptime pointer: []const u8) void {
-        var current = value;
+    pub fn get(value: *const std.json.Value, comptime pointer: []const u8) void {
+        var current = value.*;
         inline for (shared.pointerTokens(pointer)) |token| {
             switch (current) {
                 .object => |object| current = object.get(token) orelse return,
