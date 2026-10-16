@@ -9,8 +9,8 @@
             .hash = "serde-1.1.0-1DszT1I_EgAdQQ0iYBWv7CN92g-m4PiH2_Hr7xV-rUOy",
         },
         .jsonz = .{
-            .url = "git+https://github.com/KercyDing/jsonz?ref=v0.9.3#484974e519143aed8a13b9a00a01c08a02da0168",
-            .hash = "jsonz-0.9.3-DD_xno8uCQBcGwewfw15VZ8a3zc3H3d2FNbSyPIYq457",
+            .url = "git+https://github.com/KercyDing/jsonz?ref=v0.10.0#b76bf8e93e5e05393d43706cde52b4d6a8f84602",
+            .hash = "jsonz-0.10.0-DD_xntVCCQDWetiAPm3F8F_Quxmu3B-YGYQvmYYEqVeR",
         },
         .json_lalinsky = .{
             .url = "git+https://github.com/lalinsky/json.zig?ref=main#0813fe13799fa2cb9e30dea5088d5e43eb574a99",

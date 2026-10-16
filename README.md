@@ -14,7 +14,7 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 
 | Name | Language | Project | Tasks |
 | --- | --- | --- | --- |
-| `jsonz` | Zig | [KercyDing/jsonz](https://github.com/KercyDing/jsonz) 0.9.2 | all |
+| `jsonz` | Zig | [KercyDing/jsonz](https://github.com/KercyDing/jsonz) 0.10.0 | all |
 | `std.json` | Zig | Zig standard library | all |
 | `serde` | Zig | [OrlovEvgeny/serde.zig](https://github.com/OrlovEvgeny/serde.zig) | encode, decode |
 | `json.zig` | Zig | [lalinsky/json.zig](https://github.com/lalinsky/json.zig), pinned commit `0813fe1` | encode, decode |
