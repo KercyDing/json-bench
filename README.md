@@ -107,10 +107,10 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 ## Scan
 
 The `scan` task parses each dataset once, then times full traversals of the
-parsed document. Every implementation visits each value once with its own
-recursion: objects and arrays are walked, numbers fold the bit pattern of their
-`f64` value into the checksum, strings fold their byte length, and `true`,
-`false` and `null` fold `1`. The traversal goes through each library's own
-iteration API, so the number reflects the DOM layout as much as the accessors,
-and the reported `GB/s` is the document's bytes per second of traversal.
+parsed document. Every implementation visits each value once: objects and
+arrays are walked, numbers fold the bit pattern of their `f64` value into the
+checksum, strings fold their byte length, and `true`, `false` and `null` fold
+`1`. The traversal goes through each library's own iteration API, so the number
+reflects the DOM layout as much as the accessors, and the reported `GB/s` is
+the document's bytes per second of traversal.
 

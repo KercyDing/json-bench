@@ -23,24 +23,16 @@ const Adapter = struct {
 
     pub fn scan(value: *const jsonz.dom.Document) void {
         var checksum: u64 = 0;
-        walk(value.root(), &checksum);
-        std.mem.doNotOptimizeAway(checksum);
-    }
-
-    fn walk(node: jsonz.dom.Node, checksum: *u64) void {
-        switch (node.kind()) {
-            .object => {
-                var members = node.objectIterator() catch unreachable;
-                while (members.next()) |member| walk(member.value, checksum);
-            },
-            .array => {
-                var elements = node.arrayIterator() catch unreachable;
-                while (elements.next()) |element| walk(element, checksum);
-            },
-            .number => checksum.* +%= @bitCast(node.toNumber(.f64) catch unreachable),
-            .string => checksum.* +%= node.asString().?.len,
-            .bool, .null => checksum.* +%= 1,
+        var values = value.values();
+        while (values.next()) |node| {
+            switch (node.kind()) {
+                .number => checksum +%= @bitCast(node.toNumber(.f64) catch unreachable),
+                .string => checksum +%= node.asString().?.len,
+                .bool, .null => checksum +%= 1,
+                .array, .object => {},
+            }
         }
+        std.mem.doNotOptimizeAway(checksum);
     }
 
     pub fn deinit(value: anytype) void {
