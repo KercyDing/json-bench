@@ -24,44 +24,35 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 | `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, scan |
 | `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, scan |
 
-`serde.zig` and `json.zig` have no DOM, so they are left out of the DOM tasks
-instead of being compared on an API they do not have. `json.zig` uses
-`decodeFromSliceLeaky` with the iteration arena (strings are copied) and
-`encode` into an allocating writer. Unknown fields are skipped to match the
-shared partial schemas. `simdjson`'s DOM is immutable — there is no
-way to edit a parsed tree — so its `transform` serializes what it parsed with
-`minify()`.
-
-json.zig is pinned to a post-0.1.0 commit for Zig 0.16/0.17 build-script
-compatibility; the 0.1.0 release build script does not support Zig 0.17.
+`serde.zig` and `json.zig` support typed tasks only. `json.zig` is pinned for
+Zig 0.16/0.17 compatibility. `simdjson` uses `minify()` for transform.
 
 ## Tasks
 
-| Task | Token | What it measures |
+| Task | Token | Timed operation |
 | --- | --- | --- |
-| Encode known data | `known-encode` | Serialize a typed Zig value. |
-| Decode known data | `known-decode` | Parse into a typed Zig value. |
-| Load arbitrary data | `arbitrary-decode` | Parse into a DOM. |
-| Transform data | `transform` | Parse into a DOM and serialize it back. |
-| Scan document | `scan` | Walk every value of the parsed DOM through the library's own iteration API. |
+| Encode known data | `known-encode` | Typed Zig value → JSON. |
+| Decode known data | `known-decode` | JSON → typed Zig value, skipping unknown fields. |
+| Load arbitrary data | `arbitrary-decode` | JSON → DOM. |
+| Transform data | `transform` | JSON → DOM → JSON, without edits. |
+| Scan document | `scan` | Traverse the DOM and accumulate scalar values into a checksum. |
 
-The first two need a schema, so they only run for the Zig libraries.
+Typed tasks use shared Zig schemas. Scan visits every value through the
+library's own iteration API; object keys are excluded.
 
 ## Methodology
 
-- **One-shot owning parse.** Each timed iteration creates the storage that owns
-  the parsed result. Reading the input and freeing the result are excluded.
-- **Input ownership is not normalized.** `yyjson_read` lets the DOM's strings
-  point into the caller's input, so it never copies the input; `jsonz` copies it
-  (in-place escape decoding needs a mutable, padded copy), `simdjson` builds a
-  fresh `padded_string`, and `simd-json` clones the buffer. The timed region
-  includes whatever the implementation itself does, copy included — this is a
-  real design difference, not a shared cost. Every implementation also runs on
-  the platform's default allocator, though `simd-json` asks for
-  `mimalloc`/`jemalloc` and `snmalloc`.
-- **`scan` times traversal, not parsing.** It parses each dataset once, keeps
-  the document alive, and times whole traversals of it; the other tasks time the
-  parse, the serialize, or both, per sample.
+- **Timing boundaries.** File I/O and result cleanup are excluded. Encode
+  prepares its typed value once; scan parses once. Other tasks parse anew on
+  each iteration.
+- **Metrics.** `ns/op` and `ops/s` refer to complete operations. `GB/s` uses
+  output bytes for encode and input bytes otherwise; for scan, one operation
+  traverses one document.
+- **Input ownership is not normalized.** For load, `jsonz` parses a reusable
+  mutable, padded buffer restored before timing; for transform, it copies the
+  input inside the timed region. `simdjson` builds a fresh `padded_string` and
+  `simd-json` clones the buffer inside timing. Each adapter uses its library's
+  allocation strategy rather than a shared allocator.
 - **Processes and medians.** Each implementation runs in its own process,
   `--runs` times, with the order rotated between runs and a warmup before each
   thread count; results are medians across processes.
@@ -103,14 +94,3 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 | `rust/` | sonic-rs and simd-json benchmarks. |
 | `data/json/` | Corpus. |
 | `results/` | Generated reports (gitignored). |
-
-## Scan
-
-The `scan` task parses each dataset once, then times full traversals of the
-parsed document. Every implementation visits each value once: objects and
-arrays are walked, numbers fold the bit pattern of their `f64` value into the
-checksum, strings fold their byte length, and `true`, `false` and `null` fold
-`1`. The traversal goes through each library's own iteration API, so the number
-reflects the DOM layout as much as the accessors, and the reported `GB/s` is
-the document's bytes per second of traversal.
-
