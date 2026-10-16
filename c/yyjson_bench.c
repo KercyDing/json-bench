@@ -7,7 +7,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
 #include <time.h>
+#endif
 
 #ifndef BENCH_DATA_DIR
 #define BENCH_DATA_DIR "data/json"
@@ -19,10 +24,23 @@ static const char *const datasets[] = {
     "twitter.json", "twitterescaped.json",
 };
 
+/// Monotonic nanoseconds. Windows uses the same counter libc++'s
+/// `steady_clock` uses, so the C and C++ rows measure with one clock; mingw's
+/// `clock_gettime` shim wants `clock_gettime64`, which arm64 lacks.
 static uint64_t now_ns(void) {
+#ifdef _WIN32
+    static LARGE_INTEGER frequency;
+    if (frequency.QuadPart == 0) QueryPerformanceFrequency(&frequency);
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    const uint64_t seconds = (uint64_t)(counter.QuadPart / frequency.QuadPart);
+    const uint64_t fraction = (uint64_t)(counter.QuadPart % frequency.QuadPart);
+    return seconds * 1000000000ULL + fraction * 1000000000ULL / (uint64_t)frequency.QuadPart;
+#else
     struct timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
     return (uint64_t)time.tv_sec * 1000000000ULL + (uint64_t)time.tv_nsec;
+#endif
 }
 
 static size_t repeat_count(size_t size) {
