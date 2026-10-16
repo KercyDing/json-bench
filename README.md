@@ -14,19 +14,26 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 
 | Name | Language | Project | Tasks |
 | --- | --- | --- | --- |
-| `jsonz` | Zig | [KercyDing/jsonz](https://github.com/KercyDing/jsonz) | all |
+| `jsonz` | Zig | [KercyDing/jsonz](https://github.com/KercyDing/jsonz) 0.9.2 | all |
 | `std.json` | Zig | Zig standard library | all |
 | `serde` | Zig | [OrlovEvgeny/serde.zig](https://github.com/OrlovEvgeny/serde.zig) | encode, decode |
+| `json.zig` | Zig | [lalinsky/json.zig](https://github.com/lalinsky/json.zig), pinned commit `0813fe1` | encode, decode |
 | `yyjson` | C | [ibireme/yyjson](https://github.com/ibireme/yyjson) | load, transform, get |
 | `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, transform, get |
 | `glaze` | C++ | [stephenberry/glaze](https://github.com/stephenberry/glaze) | load, transform, get |
 | `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, get |
 | `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, get |
 
-`serde.zig` has no DOM, so it is left out of the DOM tasks instead of being
-compared on an API it does not have. `simdjson`'s DOM is immutable — there is no
+`serde.zig` and `json.zig` have no DOM, so they are left out of the DOM tasks
+instead of being compared on an API they do not have. `json.zig` uses
+`decodeFromSliceLeaky` with the iteration arena (strings are copied) and
+`encode` into an allocating writer. Unknown fields are skipped to match the
+shared partial schemas. `simdjson`'s DOM is immutable — there is no
 way to edit a parsed tree — so its `transform` serializes what it parsed with
 `minify()`.
+
+json.zig is pinned to a post-0.1.0 commit for Zig 0.16/0.17 build-script
+compatibility; the 0.1.0 release build script does not support Zig 0.17.
 
 ## Tasks
 
@@ -91,7 +98,7 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 | `bench.py` | Build, run, and report driver. Records the CPU and tool versions of the machine in `measurements.json`. |
 | `rank.py` | Ranks published results per platform and merged over the DOM tasks (`--all-tasks` adds the typed Zig-only ones), and draws the ranking with `--png` (`python rank.py ~/Downloads --png ranking.png`). |
 | `CMakePresets.json` | The `release` preset (`Unix Makefiles`, `Release`, `build/`) shared by `bench.py` and editors; keeps cached generator/build type from drifting. `release-windows` is the same preset with `Ninja`. |
-| `zig/` | jsonz, std.json and serde.zig adapters, sharing the `bench.zig` harness. |
+| `zig/` | jsonz, std.json, serde.zig and json.zig adapters, sharing the `bench.zig` harness. |
 | `c/` | yyjson benchmark. |
 | `cpp/` | simdjson and Glaze benchmarks. |
 | `rust/` | sonic-rs and simd-json benchmarks. |

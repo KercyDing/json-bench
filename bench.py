@@ -42,7 +42,7 @@ import sys
 import webbrowser
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
@@ -260,7 +260,7 @@ KNOWN_DATASETS = frozenset(
 ARBITRARY_DATASETS = frozenset(ALL_DATASETS) - {"small.json"}
 FORMAT = "json"
 FORMAT_LABEL = "JSON"
-IMPLEMENTATIONS = ("jsonz", "std.json", "serde", "yyjson", "simdjson", "glaze", "sonic-rs", "simd-json")
+IMPLEMENTATIONS = ("jsonz", "std.json", "serde", "json.zig", "yyjson", "simdjson", "glaze", "sonic-rs", "simd-json")
 TASKS = (
     ("Encode known data", "known-encode"),
     ("Decode known data", "known-decode"),
@@ -274,6 +274,7 @@ NO_THROUGHPUT_TASKS = frozenset({TASK_LABELS["get"]})
 ALL_TOKENS = tuple(token for _, token in TASKS)
 JSON_TOKENS = {
     "serde": ("known-encode", "known-decode"),
+    "json.zig": ("known-encode", "known-decode"),
     "jsonz": ALL_TOKENS,
     "std.json": ALL_TOKENS,
     "yyjson": ("arbitrary-decode", "transform", "get"),
@@ -284,6 +285,7 @@ JSON_TOKENS = {
 }
 RUN_COMMANDS = {
     "serde": ["zig-out/bin/serde_bench"],
+    "json.zig": ["zig-out/bin/json_lalinsky_bench"],
     "jsonz": ["zig-out/bin/jsonz_bench"],
     "std.json": ["zig-out/bin/std_bench"],
     "yyjson": ["./build/yyjson_bench"],
@@ -778,7 +780,10 @@ def load_summary(path: Path) -> tuple[list[SummaryRow], int, dict[str, object]]:
         raise TypeError(f"{path} does not contain a summary array")
     stored = payload.get("metadata")
     metadata: dict[str, object] = stored if isinstance(stored, dict) else {}
-    runs = int(metadata.get("runs", 1))
+    runs_value = metadata.get("runs", 1)
+    if not isinstance(runs_value, (int, float, str)):
+        raise TypeError(f"{path} has an invalid run count")
+    runs = int(runs_value)
     for row in rows:
         # Older summaries stored microseconds.
         if "latency_ns" not in row:
@@ -1117,7 +1122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parallel_limit = None if args.parallel is None else (args.parallel or machine_threads())
         measurements, commands = run_benchmarks(args.runs, parallel_limit, zig, optimize, output_dir)
         metadata = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "project_root": str(ROOT),
             "python": platform.python_version(),
             "platform": platform.platform(),

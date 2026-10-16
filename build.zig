@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const serde = b.dependency("serde", .{ .target = target, .optimize = optimize });
     const jsonz = b.dependency("jsonz", .{ .target = target, .optimize = optimize });
+    const json_lalinsky = b.dependency("json_lalinsky", .{ .target = target, .optimize = optimize });
 
     addBenchmark(b, target, optimize, "jsonz_bench", "zig/jsonz.zig", &.{
         .{ .name = "jsonz", .module = jsonz.module("jsonz") },
@@ -14,6 +15,9 @@ pub fn build(b: *std.Build) void {
         .{ .name = "serde", .module = serde.module("serde") },
     });
     addBenchmark(b, target, optimize, "std_bench", "zig/std.zig", &.{});
+    addBenchmark(b, target, optimize, "json_lalinsky_bench", "zig/json_lalinsky.zig", &.{
+        .{ .name = "json_lalinsky", .module = json_lalinsky.module("json") },
+    });
 }
 
 fn addBenchmark(
