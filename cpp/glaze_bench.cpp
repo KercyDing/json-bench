@@ -1,36 +1,26 @@
 #include "bench.hpp"
 
-#include "../c/bench_paths.h"
-
 #include <glaze/glaze.hpp>
+
+#include <bit>
 
 namespace {
 
-const bench_path *find_path(std::string_view name) {
-    for (const auto &path : bench_paths) {
-        if (name == path.dataset) return &path;
+/// Visits every value in the tree once, folding a bit pattern into `acc`.
+std::uint64_t scan_value(const glz::generic &value) {
+    std::uint64_t acc = 0;
+    if (const auto *object = value.get_if<glz::generic::object_t>()) {
+        for (const auto &entry : *object) acc += scan_value(entry.second);
+    } else if (const auto *array = value.get_if<glz::generic::array_t>()) {
+        for (const auto &item : *array) acc += scan_value(item);
+    } else if (const auto *number = value.get_if<double>()) {
+        acc += std::bit_cast<std::uint64_t>(*number);
+    } else if (const auto *text = value.get_if<std::string>()) {
+        acc += text->size();
+    } else {
+        acc += 1;
     }
-    return nullptr;
-}
-
-/// Walks the precompiled path with Glaze's generic object/array accessors.
-const glz::generic *get_target(const glz::generic &root, const bench_path &path) {
-    const glz::generic *current = &root;
-    for (std::size_t i = 0; i < path.count; i++) {
-        const bench_step &step = path.steps[i];
-        if (step.is_index) {
-            const auto *array = current->get_if<glz::generic::array_t>();
-            if (array == nullptr || step.index >= array->size()) return nullptr;
-            current = &(*array)[step.index];
-        } else {
-            const auto *object = current->get_if<glz::generic::object_t>();
-            if (object == nullptr) return nullptr;
-            const auto it = object->find(std::string_view(step.field));
-            if (it == object->end()) return nullptr;
-            current = &it->second;
-        }
-    }
-    return current;
+    return acc;
 }
 
 } // namespace
@@ -73,18 +63,17 @@ int main() {
         }
         bench::print_result("Glaze", "transform", input.size(), repeats, elapsed);
 
-        const auto *path = find_path(name);
         glz::generic document;
-        if (glz::read_json(document, input) || path == nullptr) return 1;
-        bench::black_box(get_target(document, *path));
+        if (glz::read_json(document, input)) return 1;
 
         elapsed = 0;
         for (std::size_t i = 0; i < repeats; ++i) {
             const auto start = bench::now_ns();
-            for (std::size_t b = 0; b < bench::get_batch; ++b) bench::black_box(get_target(document, *path));
+            const auto acc = scan_value(document);
             const auto end = bench::now_ns();
+            bench::black_box(acc);
             elapsed += std::max<std::uint64_t>(1, end - start);
         }
-        bench::print_result("Glaze", "get", input.size(), repeats * bench::get_batch, elapsed);
+        bench::print_result("Glaze", "scan", input.size(), repeats, elapsed);
     }
 }

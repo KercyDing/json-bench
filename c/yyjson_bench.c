@@ -1,7 +1,5 @@
 #include "yyjson.h"
 
-#include "bench_paths.h"
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -74,16 +72,34 @@ static void black_box(const void *value) {
     __asm__ __volatile__("" : : "g"(value) : "memory");
 }
 
-static const bench_path *find_path(const char *name) {
-    for (size_t i = 0; i < sizeof(bench_paths) / sizeof(bench_paths[0]); i++) {
-        if (strcmp(bench_paths[i].dataset, name) == 0) return &bench_paths[i];
+/// Visits every value in the tree once, folding a bit pattern into `acc`.
+static uint64_t scan_value(yyjson_val *value) {
+    uint64_t acc = 0;
+    if (yyjson_is_obj(value)) {
+        yyjson_obj_iter iter;
+        yyjson_obj_iter_init(value, &iter);
+        yyjson_val *key;
+        while ((key = yyjson_obj_iter_next(&iter)) != NULL) {
+            acc += scan_value(yyjson_obj_iter_get_val(key));
+        }
+    } else if (yyjson_is_arr(value)) {
+        yyjson_arr_iter iter;
+        yyjson_arr_iter_init(value, &iter);
+        yyjson_val *item;
+        while ((item = yyjson_arr_iter_next(&iter)) != NULL) {
+            acc += scan_value(item);
+        }
+    } else if (yyjson_is_num(value)) {
+        const double number = yyjson_get_num(value);
+        uint64_t bits;
+        memcpy(&bits, &number, sizeof(bits));
+        acc += bits;
+    } else if (yyjson_is_str(value)) {
+        acc += (uint64_t)yyjson_get_len(value);
+    } else {
+        acc += 1;
     }
-    return NULL;
-}
-
-/// Resolves the RFC 6901 pointer with yyjson's own pointer API.
-static yyjson_val *get_target(yyjson_val *root, const bench_path *path) {
-    return yyjson_ptr_get(root, path->pointer);
+    return acc;
 }
 
 static uint64_t bench_decode(const char *input, size_t size, size_t repeats) {
@@ -129,16 +145,13 @@ static uint64_t bench_transform(const char *input, size_t size, size_t repeats) 
     return elapsed;
 }
 
-#define GET_BATCH 1024
-
-static uint64_t bench_get(yyjson_val *root, const bench_path *path, size_t repeats) {
-    black_box(get_target(root, path));
-
+static uint64_t bench_scan(yyjson_val *root, size_t repeats) {
     uint64_t elapsed = 0;
     for (size_t i = 0; i < repeats; i++) {
         const uint64_t start = now_ns();
-        for (size_t b = 0; b < GET_BATCH; b++) black_box(get_target(root, path));
+        const uint64_t acc = scan_value(root);
         const uint64_t end = now_ns();
+        black_box(&acc);
         elapsed += end > start ? end - start : 1;
     }
     return elapsed;
@@ -183,14 +196,13 @@ int main(void) {
         }
         print_result("transform", size, repeats, transform);
 
-        const bench_path *path = find_path(name);
         yyjson_doc *document = yyjson_read(input, size, 0);
-        if (document == NULL || path == NULL) {
-            fprintf(stderr, "failed to load %s for get\n", name);
+        if (document == NULL) {
+            fprintf(stderr, "failed to load %s for scan\n", name);
             free(input);
             return 1;
         }
-        print_result("get", size, repeats * GET_BATCH, bench_get(yyjson_doc_get_root(document), path, repeats));
+        print_result("scan", size, repeats, bench_scan(yyjson_doc_get_root(document), repeats));
         yyjson_doc_free(document);
 
         free(input);

@@ -7,7 +7,7 @@ support it:
 * Decode known data      (known-decode)     Zig only
 * Load arbitrary data    (arbitrary-decode)
 * Transform data         (transform)
-* Get element            (get)
+* Scan document          (scan)
 
 The Zig programs already perform warmup and repeat each fixture according to
 its size and print one task-tagged metric line per dataset. This driver runs
@@ -266,22 +266,20 @@ TASKS = (
     ("Decode known data", "known-decode"),
     ("Load arbitrary data", "arbitrary-decode"),
     ("Transform data", "transform"),
-    ("Get element", "get"),
+    ("Scan document", "scan"),
 )
 TASK_LABELS = {token: label for label, token in TASKS}
-# `get` reads a single element, so byte throughput over the input is meaningless.
-NO_THROUGHPUT_TASKS = frozenset({TASK_LABELS["get"]})
 ALL_TOKENS = tuple(token for _, token in TASKS)
 JSON_TOKENS = {
     "serde": ("known-encode", "known-decode"),
     "json.zig": ("known-encode", "known-decode"),
     "jsonz": ALL_TOKENS,
     "std.json": ALL_TOKENS,
-    "yyjson": ("arbitrary-decode", "transform", "get"),
-    "simdjson": ("arbitrary-decode", "transform", "get"),
-    "glaze": ("arbitrary-decode", "transform", "get"),
-    "sonic-rs": ("arbitrary-decode", "transform", "get"),
-    "simd-json": ("arbitrary-decode", "transform", "get"),
+    "yyjson": ("arbitrary-decode", "transform", "scan"),
+    "simdjson": ("arbitrary-decode", "transform", "scan"),
+    "glaze": ("arbitrary-decode", "transform", "scan"),
+    "sonic-rs": ("arbitrary-decode", "transform", "scan"),
+    "simd-json": ("arbitrary-decode", "transform", "scan"),
 }
 RUN_COMMANDS = {
     "serde": ["zig-out/bin/serde_bench"],
@@ -673,12 +671,13 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int, metadata: 
             for dataset in ALL_DATASETS
             if any((implementation, dataset, task) in by_key for implementation in implementations)
         ]
-        show_throughput = task not in NO_THROUGHPUT_TASKS
-        headers = []
+        headers: list[str] = []
         for implementation in implementations:
-            if show_throughput:
-                headers.append(f"{implementation} GB/s")
-            headers += [f"{implementation} ns/op", f"{implementation} ops/s"]
+            headers += [
+                f"{implementation} GB/s",
+                f"{implementation} ns/op",
+                f"{implementation} ops/s",
+            ]
         lines.extend(
             [
                 f"## {FORMAT_LABEL} · {task}",
@@ -692,11 +691,10 @@ def write_markdown(path: Path, rows: Sequence[SummaryRow], runs: int, metadata: 
             for implementation in implementations:
                 row = by_key.get((implementation, dataset, task))
                 if row is None:
-                    values += ["-"] * (3 if show_throughput else 2)
+                    values += ["-"] * 3
                     continue
-                if show_throughput:
-                    values.append(f"{float(row['throughput_gb_s']):.3f}")
                 values += [
+                    f"{float(row['throughput_gb_s']):.3f}",
                     f"{float(row['latency_ns']):.2f}",
                     f"{float(row['ops_per_s']):,.0f}",
                 ]
@@ -738,7 +736,7 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
         ]
         if not implementations:
             continue
-        unit = "ops/s" if task in NO_THROUGHPUT_TASKS else "GB/s"
+        unit = "GB/s"
         lines.extend(
             [
                 f"### {FORMAT_LABEL} · {task} ({unit})",
@@ -752,7 +750,7 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
             baseline = baselines[(task, implementation)]
             for count in counts:
                 total = totals.get((task, implementation, count), 0.0)
-                rate = f"{total:,.0f}" if task in NO_THROUGHPUT_TASKS else f"{total:.2f}"
+                rate = f"{total:.2f}"
                 cells.append(f"{rate} ({total / baseline:.2f}×)")
             lines.append(f"| {implementation} | " + " | ".join(cells) + " |")
         lines.append("")
@@ -760,15 +758,11 @@ def scaling_markdown(rows: Sequence[SummaryRow]) -> list[str]:
 
 
 def thread_totals(rows: Sequence[SummaryRow]) -> dict[tuple[str, str, int], float]:
-    """Aggregate rate summed over datasets, per (task, implementation, threads).
-
-    Tasks that move no payload (`NO_THROUGHPUT_TASKS`) are summed in operations
-    per second instead of bytes per second.
-    """
+    """Aggregate rate summed over datasets, per (task, implementation, threads)."""
     totals: dict[tuple[str, str, int], float] = {}
     for row in rows:
         key = (str(row["task"]), str(row["implementation"]), int(row.get("threads", 1)))
-        scale = float(row["ops_per_s"]) if str(row["task"]) in NO_THROUGHPUT_TASKS else float(row["throughput_gb_s"])
+        scale = float(row["throughput_gb_s"])
         totals[key] = totals.get(key, 0.0) + scale
     return totals
 
@@ -811,8 +805,6 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int, metadata:
     chart_counter = 0
     # metric key -> (axis title, decimals for tooltips)
     CHART_METRICS = (("gb", "GB/s", 3), ("ops", "ops/s", 0))
-    # `get` moves no payload, so it charts the access latency instead.
-    LATENCY_CHART_METRICS = (("ns", "ns/op", 2), ("ops", "ops/s", 0))
 
     def chart_html(
         categories: list[str],
@@ -937,12 +929,8 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int, metadata:
                     "showInLegend": False,
                 }
             )
-            unit = "ops/s" if task in NO_THROUGHPUT_TASKS else "GB/s"
-            point_format = (
-                "{series.name}: <b>{point.y:,.0f} ops/s</b><br/>"
-                if task in NO_THROUGHPUT_TASKS
-                else "{series.name}: <b>{point.y:.3f} GB/s</b><br/>"
-            )
+            unit = "GB/s"
+            point_format = "{series.name}: <b>{point.y:.3f} GB/s</b><br/>"
             pair = [
                 card(
                     f"{label} \u00b7 {task} \u00b7 {unit} by thread count",
@@ -995,7 +983,7 @@ def write_html_page(path: Path, rows: Sequence[SummaryRow], runs: int, metadata:
         ]
         if not implementations_present:
             continue
-        metrics = LATENCY_CHART_METRICS if task in NO_THROUGHPUT_TASKS else CHART_METRICS
+        metrics = CHART_METRICS
         if task == TASKS[-1][0]:
             # The final task keeps only ops/s; its ns/op chart was redundant.
             metrics = tuple(metric for metric in metrics if metric[0] != "ns")

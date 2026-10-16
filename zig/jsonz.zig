@@ -21,9 +21,26 @@ const Adapter = struct {
         return jsonz.typed.toSlice(allocator, value, .{});
     }
 
-    pub fn get(value: *const jsonz.dom.Document, comptime pointer: []const u8) void {
-        const node = value.ptrGet(pointer) catch return;
-        std.mem.doNotOptimizeAway(node);
+    pub fn scan(value: *const jsonz.dom.Document) void {
+        var checksum: u64 = 0;
+        walk(value.root(), &checksum);
+        std.mem.doNotOptimizeAway(checksum);
+    }
+
+    fn walk(node: jsonz.dom.Node, checksum: *u64) void {
+        switch (node.kind()) {
+            .object => {
+                var members = node.objectIterator() catch unreachable;
+                while (members.next()) |member| walk(member.value, checksum);
+            },
+            .array => {
+                var elements = node.arrayIterator() catch unreachable;
+                while (elements.next()) |element| walk(element, checksum);
+            },
+            .number => checksum.* +%= @bitCast(node.toNumber(.f64) catch unreachable),
+            .string => checksum.* +%= node.asString().?.len,
+            .bool, .null => checksum.* +%= 1,
+        }
     }
 
     pub fn deinit(value: anytype) void {

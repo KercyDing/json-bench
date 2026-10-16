@@ -1,6 +1,5 @@
 const std = @import("std");
 const bench = @import("bench.zig");
-const shared = @import("shared.zig");
 
 const Adapter = struct {
     pub const name = "std.json";
@@ -17,20 +16,25 @@ const Adapter = struct {
         return output.toOwnedSlice();
     }
 
-    pub fn get(value: *const std.json.Value, comptime pointer: []const u8) void {
-        var current = value.*;
-        inline for (shared.pointerTokens(pointer)) |token| {
-            switch (current) {
-                .object => |object| current = object.get(token) orelse return,
-                .array => |array| {
-                    const index = std.fmt.parseInt(usize, token, 10) catch return;
-                    if (index >= array.items.len) return;
-                    current = array.items[index];
-                },
-                else => return,
-            }
+    pub fn scan(value: *const std.json.Value) void {
+        var checksum: u64 = 0;
+        walk(value.*, &checksum);
+        std.mem.doNotOptimizeAway(checksum);
+    }
+
+    fn walk(value: std.json.Value, checksum: *u64) void {
+        switch (value) {
+            .object => |object| {
+                var members = object.iterator();
+                while (members.next()) |member| walk(member.value_ptr.*, checksum);
+            },
+            .array => |array| for (array.items) |element| walk(element, checksum),
+            .integer => |integer| checksum.* +%= @bitCast(@as(f64, @floatFromInt(integer))),
+            .float => |float| checksum.* +%= @bitCast(float),
+            .number_string => |text| checksum.* +%= text.len,
+            .string => |text| checksum.* +%= text.len,
+            .bool, .null => checksum.* +%= 1,
         }
-        std.mem.doNotOptimizeAway(current);
     }
 };
 

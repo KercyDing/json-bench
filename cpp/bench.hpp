@@ -25,29 +25,6 @@ inline constexpr std::string_view datasets[] = {
     "twitter.json", "twitterescaped.json",
 };
 
-inline constexpr std::pair<std::string_view, std::string_view> get_paths[] = {
-    {"canada.json", "/features/0/geometry/coordinates/0/0"},
-    {"citm_catalog.json", "/areaNames/205705993"},
-    {"fgo.json", "/mstSvt/0/relateQuestIds/0"},
-    {"github_events.json", "/0/actor/login"},
-    {"gsoc-2018.json", "/0/name"},
-    {"lottie.json", "/assets/0/layers/0/nm"},
-    {"otfcc.json", "/head/version"},
-    {"poet.json", "/0/name"},
-    {"twitter.json", "/statuses/0/user/id"},
-    {"twitterescaped.json", "/statuses/0/user/id"},
-};
-
-inline std::string_view get_path(std::string_view name) {
-    for (const auto &[dataset, path] : get_paths) {
-        if (dataset == name) return path;
-    }
-    std::cerr << "no get path for " << name << '\n';
-    std::exit(1);
-}
-
-inline constexpr std::size_t get_batch = 1024;
-
 inline std::size_t repeat_count(std::size_t size) {
     if (size <= 256) return 100000;
     constexpr std::size_t target = 64 * 1024 * 1024;

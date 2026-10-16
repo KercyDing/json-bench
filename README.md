@@ -18,11 +18,11 @@ DOM tasks also bring in native C, C++, and Rust parsers.
 | `std.json` | Zig | Zig standard library | all |
 | `serde` | Zig | [OrlovEvgeny/serde.zig](https://github.com/OrlovEvgeny/serde.zig) | encode, decode |
 | `json.zig` | Zig | [lalinsky/json.zig](https://github.com/lalinsky/json.zig), pinned commit `0813fe1` | encode, decode |
-| `yyjson` | C | [ibireme/yyjson](https://github.com/ibireme/yyjson) | load, transform, get |
-| `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, transform, get |
-| `glaze` | C++ | [stephenberry/glaze](https://github.com/stephenberry/glaze) | load, transform, get |
-| `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, get |
-| `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, get |
+| `yyjson` | C | [ibireme/yyjson](https://github.com/ibireme/yyjson) | load, transform, scan |
+| `simdjson` | C++ | [simdjson/simdjson](https://github.com/simdjson/simdjson) | load, transform, scan |
+| `glaze` | C++ | [stephenberry/glaze](https://github.com/stephenberry/glaze) | load, transform, scan |
+| `sonic-rs` | Rust | [bytedance/sonic-rs](https://github.com/bytedance/sonic-rs) | load, transform, scan |
+| `simd-json` | Rust | [simd-lite/simd-json](https://github.com/simd-lite/simd-json) | load, transform, scan |
 
 `serde.zig` and `json.zig` have no DOM, so they are left out of the DOM tasks
 instead of being compared on an API they do not have. `json.zig` uses
@@ -43,7 +43,7 @@ compatibility; the 0.1.0 release build script does not support Zig 0.17.
 | Decode known data | `known-decode` | Parse into a typed Zig value. |
 | Load arbitrary data | `arbitrary-decode` | Parse into a DOM. |
 | Transform data | `transform` | Parse into a DOM and serialize it back. |
-| Get element | `get` | Read one nested element through the library's own access API. |
+| Scan document | `scan` | Walk every value of the parsed DOM through the library's own iteration API. |
 
 The first two need a schema, so they only run for the Zig libraries.
 
@@ -59,10 +59,9 @@ The first two need a schema, so they only run for the Zig libraries.
   real design difference, not a shared cost. Every implementation also runs on
   the platform's default allocator, though `simd-json` asks for
   `mimalloc`/`jemalloc` and `snmalloc`.
-- **`get` amortizes the clock.** A single access is only tens of nanoseconds, so
-  every sample resolves the element 1024 times between the two clock reads. The
-  clock overhead is then under 0.1% of the reported `ns/op`. The other tasks are
-  millisecond-scale and time one operation per sample.
+- **`scan` times traversal, not parsing.** It parses each dataset once, keeps
+  the document alive, and times whole traversals of it; the other tasks time the
+  parse, the serialize, or both, per sample.
 - **Processes and medians.** Each implementation runs in its own process,
   `--runs` times, with the order rotated between runs and a warmup before each
   thread count; results are medians across processes.
@@ -105,21 +104,13 @@ On Windows the C/C++ build uses `release-windows`, the same preset with the
 | `data/json/` | Corpus. |
 | `results/` | Generated reports (gitignored). |
 
-## Get targets
+## Scan
 
-The `get` task reads one nested element per dataset with each library's own
-access API: `ptrGet` (RFC 6901) for jsonz, `at_pointer` for simdjson, `yyjson_ptr_get` for yyjson, and native
-object/array accessors for the rest.
+The `scan` task parses each dataset once, then times full traversals of the
+parsed document. Every implementation visits each value once with its own
+recursion: objects and arrays are walked, numbers fold the bit pattern of their
+`f64` value into the checksum, strings fold their byte length, and `true`,
+`false` and `null` fold `1`. The traversal goes through each library's own
+iteration API, so the number reflects the DOM layout as much as the accessors,
+and the reported `GB/s` is the document's bytes per second of traversal.
 
-| Dataset | Pointer |
-| --- | --- |
-| `canada.json` | `/features/0/geometry/coordinates/0/0` |
-| `citm_catalog.json` | `/areaNames/205705993` |
-| `fgo.json` | `/mstSvt/0/relateQuestIds/0` |
-| `github_events.json` | `/0/actor/login` |
-| `gsoc-2018.json` | `/0/name` |
-| `lottie.json` | `/assets/0/layers/0/nm` |
-| `otfcc.json` | `/head/version` |
-| `poet.json` | `/0/name` |
-| `twitter.json` | `/statuses/0/user/id` |
-| `twitterescaped.json` | `/statuses/0/user/id` |

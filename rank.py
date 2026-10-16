@@ -29,9 +29,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 
-GET_TASK = "Get element"
+SCAN_TASK = "Scan document"
 TYPED_TASKS = ("Encode known data", "Decode known data")
-DOM_TASKS = ("Load arbitrary data", "Transform data", GET_TASK)
+DOM_TASKS = ("Load arbitrary data", "Transform data", SCAN_TASK)
 TASKS = (*TYPED_TASKS, *DOM_TASKS)
 Row = dict[tuple[str, str, str], float]
 
@@ -103,7 +103,7 @@ def load(summary: Path, threads: int) -> Row:
         for entry in csv.DictReader(handle):
             if entry["task"] not in TASKS or int(entry["threads"]) != threads:
                 continue
-            column = "ops_per_s" if entry["task"] == GET_TASK else "throughput_gb_s"
+            column = "throughput_gb_s"
             rows[(entry["task"], entry["dataset"], entry["implementation"])] = float(entry[column])
     if not rows:
         raise SystemExit(f"{summary}: no measurements at {threads} thread(s)")
@@ -208,7 +208,7 @@ def task_table(tasks: dict[str, dict[str, float]], columns: Sequence[str]) -> st
         "| implementation | " + " | ".join(columns) + " |",
         "| --- | " + " | ".join("---:" for _ in columns) + " |",
     ]
-    for implementation in sorted(tasks[GET_TASK], key=overall, reverse=True):
+    for implementation in sorted(tasks[SCAN_TASK], key=overall, reverse=True):
         cells = [
             f"{tasks[task][implementation]:.2f}" if tasks[task].get(implementation) else "-"
             for task in columns
