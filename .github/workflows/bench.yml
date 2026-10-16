@@ -14,6 +14,7 @@ jobs:
   bench:
     name: ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +24,7 @@ jobs:
           - { os: macos,   arch: x64,   runner: macos-15-intel,   cc: clang, cxx: clang++ }
           - { os: macos,   arch: arm64, runner: macos-15,         cc: clang, cxx: clang++ }
           - { os: windows, arch: x64,   runner: windows-2025,     cc: gcc,   cxx: g++,   msystem: MINGW64,    packages: "mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja" }
-          # windows-11-arm: the benchmark build did not finish there yet.
+          - { os: windows, arch: arm64, runner: windows-11-arm,   cc: clang, cxx: clang++, msystem: CLANGARM64, packages: "mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-cmake mingw-w64-clang-aarch64-ninja" }
     steps:
       - uses: actions/checkout@v7
       - uses: mlugg/setup-zig@v2
